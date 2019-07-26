@@ -10,7 +10,7 @@ import networkx as nx
 
 from pouty import debug
 
-from ..state import State
+from .state import State
 
 
 class Network(object):

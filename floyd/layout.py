@@ -11,7 +11,7 @@ from toolbox.numpy import *
 from toolbox.constants import twopi
 from tenko.persistence import AutomaticCache
 
-from ..tools.specs import paramspec
+from .spec import paramspec
 
 
 HexLayoutSpec = paramspec('HexLayoutSpec',

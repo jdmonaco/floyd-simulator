@@ -8,7 +8,7 @@ from collections import deque
 import numpy as np
 from numpy import cumsum, inf
 
-from ..state import State
+from .state import State
 
 
 class RealtimeTracesPlot(object):

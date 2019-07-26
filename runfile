@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-set -ue
+set -e
 
-# Runfile script
+# toolbox runfile
 
-USAGE="Usage: run -e|vim|mvim|install|uninstall|etc..."
+USAGE="Usage: run -e|(m)vim|(un)install|exportenv|ipython|cluster|notebook"
 
 if (( $# )); then
     runcmd="$1"
@@ -20,29 +20,76 @@ fi
 # as a usage statement.
 
 
+SESSFILE="$HOME/local/vim/sessions/toolbox.vim"
+NBDIR="$HOME/projects/toolbox/notebooks"
+
+function __conda_check {
+    if [[ "${CONDA_DEFAULT_ENV+x}" ]]; then
+        if [[ "$CONDA_DEFAULT_ENV" != "toolbox" ]]; then
+            echo "Wrong environment ($CONDA_DEFAULT_ENV). Please switch to the"
+            echo "'toolbox' environment with 'conda activate toolbox'."
+            exit 1
+        fi
+    else
+        echo "Please run 'conda activate toolbox' first."
+        exit 2
+    fi
+}
+
+
 case "$runcmd" in
 
+created) cat ./.created ;;
+
 vim)
-    if [[ -f Session.vim ]]; then
-        vim -S Session.vim
+    if [[ -r "$SESSFILE" ]]; then
+        vim -S "$SESSFILE" 2>/dev/null
     else
-        vim .
+        vim +"Obsession $SESSFILE" 2>/dev/null
     fi
     ;;
 
 mvim)
-    if [[ -f Session.vim ]]; then
-        mvim -S Session.vim &>/dev/null
+    if [[ -r "$SESSFILE" ]]; then
+        mvim -S "$SESSFILE" 2>/dev/null
     else
-        mvim . &>/dev/null
+        mvim +"Obsession $SESSFILE" 2>/dev/null
     fi
     ;;
 
-install) pip install --no-deps -e "$HOME/code/toolbox" ;;
+install)
+    __conda_check
+    pip install --no-deps -e "/Users/joe/code/toolbox" ;;
 
-uninstall) pip uninstall -y toolbox ;;
+uninstall)
+    __conda_check
+    pip uninstall -y toolbox
+    ;;
 
-tmux) tmux new-session -A -s toolbox ;;
+exportenv)
+    __conda_check
+    conda env export -f environment.yml && \
+        git add environment.yml && \
+        git diff --cached
+    ;;
+
+ipython)
+    __conda_check
+    ipython --profile=toolbox
+    ;;
+
+cluster)
+    __conda_check
+    ipcluster start --profile=toolbox
+    ;;
+
+notebook)
+    __conda_check
+    [[ ! -d "$NBDIR" ]] && mkdir -p "$NBDIR"
+    jupyter notebook --notebook-dir="$NBDIR" &
+    ;;
+
+killnb) pkill -f jupyter ;;
 
 finder) open . -a finder ;;
 

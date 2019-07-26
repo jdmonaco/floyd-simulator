@@ -1,17 +1,16 @@
 """
-Groups of synaptic connections for network models.
+Groups of synaptic connections between a pair of neuron groups.
 """
 
 from toolbox.numpy import *
 from tenko.mixins import RandomMixin
 
 from .matrix import pairwise_distances as distances
-from .groups import BaseUnitGroup
-from .specs import paramspec
 from .funcs import KernelType, SamplerType
+from .groups import BaseUnitGroup
 from .delay import DelayLines
-
-from ..state import State
+from .specs import paramspec
+from .state import State
 
 
 def scale_constant(p):

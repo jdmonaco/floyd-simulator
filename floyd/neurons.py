@@ -9,14 +9,13 @@ except ImportError:
 
 from toolbox.numpy import *
 
-from .specs import paramspec, Param
-from .groups import BaseUnitGroup
+from .layout import HexagonalDiscLayout as HexLayout, HexLayoutSpec
+from .noise import OrnsteinUhlenbeckProcess as OUProcess
 from .activity import FiringRateWindow
-
-from ..lib.noise import OrnsteinUhlenbeckProcess as OUProcess
-from ..lib.layout import HexagonalDiscLayout as HexLayout, HexLayoutSpec
-from ..config import Config
-from ..state import State
+from .spec import paramspec, Param
+from .groups import BaseUnitGroup
+from .config import Config
+from .state import State
 
 
 LIFNeuronSpec = paramspec('LIFNeuronSpec',

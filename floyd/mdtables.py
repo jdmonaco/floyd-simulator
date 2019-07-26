@@ -2,7 +2,7 @@
 Create Markdown tables of neuron group statistics.
 """
 
-from ..state import State
+from .state import State
 
 
 class MarkdownTable(object):

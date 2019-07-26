@@ -6,7 +6,7 @@ from collections import namedtuple
 
 from toolbox.numpy import *
 
-from ..state import State
+from .state import State
 
 
 Timepoint = namedtuple('Timepoint', ['t', 'value'])

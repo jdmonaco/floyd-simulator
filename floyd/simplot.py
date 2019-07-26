@@ -9,8 +9,7 @@ from matplotlib.gridspec import GridSpec
 from roto.dicts import merge_two_dicts
 
 from .traces import RealtimeTracesPlot
-
-from ..state import State
+from .state import State
 
 
 class SimulationPlotter(object):

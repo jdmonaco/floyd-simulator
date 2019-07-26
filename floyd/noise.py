@@ -9,7 +9,8 @@ from pouty import printf, box
 from toolbox.numpy import *
 from tenko.persistence import AutomaticCache
 
-from ..state import State
+from .state import State
+
 
 class OrnsteinUhlenbeckProcess(AutomaticCache):
 

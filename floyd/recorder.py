@@ -5,8 +5,8 @@ Record state, model variables, and spike/event data across a simulation.
 import numpy as np
 import pandas as pd
 
-from ..state import State
-from ..config import Config
+from .state import State
+from .config import Config
 
 
 class ModelRecorder(object):

@@ -4,7 +4,7 @@ Classes for computing activity measurements.
 
 from toolbox.numpy import *
 
-from ..state import State
+from .state import State
 
 
 class FiringRateWindow(object):

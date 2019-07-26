@@ -12,7 +12,7 @@ from collections import namedtuple
 from pouty.console import ConsolePrinter, log
 from roto.dicts import AttrDict, Tree
 
-from ..state import State
+from .state import State
 
 
 """
