@@ -13,7 +13,7 @@ State = AttrDict()
 def reset_state():
     keys = list(State.keys())
     for key in keys:
-        del State[key]
+        State[key] = None
 
 
 #

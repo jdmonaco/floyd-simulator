@@ -33,16 +33,20 @@ newspec1 = NewSpec(c=3)
 > The `c=3` value overrides the `c=4` value from myspec2.
 """
 
-def paramspec(name, parent_spec=None, **defaults):
+def paramspec(name, parent=None, instance=False, **defaults):
     """
-    Create a factory function for named Spec objects with optional parent spec.
+    Create a factory closure for named Spec objects with optional parent spec.
     """
-    exec(f'class {name}(Spec): pass')
-    def _spectype(spec=None, **params):
-        spec = eval(f'{name}(spec=parent_spec, **defaults)')
-        spec.update(spec=spec, **params)
-        return spec
-    return _spectype
+    class TempSpec(Spec): pass
+    TempSpec.__name__ = name
+    parent = TempSpec(spec=parent, **defaults)
+    def getspec(spec=None, **params):
+        newspec = parent.copy()
+        newspec.update(spec=spec, **params)
+        return newspec
+    if instance:
+        return getspec()
+    return getspec
 
 def _isparam(p):
     for attr in _param_attrs:
@@ -87,6 +91,8 @@ class Spec(object):
             self.defaults[key] = value
 
         if spec is not None:
+            if callable(spec):
+                spec = spec()
             for key, value in spec:
                 set_item(key, value)
 
@@ -149,6 +155,8 @@ class Spec(object):
         Update this spec with another spec and/or keyword arguments.
         """
         if spec is not None:
+            if callable(spec):
+                spec = spec()
             for key, value in spec:
                 self[key] = value
         for key, value in keyvalues.items():

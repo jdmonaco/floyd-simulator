@@ -39,7 +39,7 @@ class Network(object):
 
         paramfile_input = TextInput(name='Filename', value='model-params')
         notes_input = TextInput(name='Notes',
-                placeholder='Describe the parameters...')
+                placeholder='Describe the results...')
         notes_txt = Markdown('', height=200)
         filename_txt = Markdown('')
         uniquify_box = Checkbox(name='Force unique', value=False)
@@ -154,7 +154,7 @@ class Network(object):
         """
         For interactive mode, run a block of simulation then update outputs.
         """
-        for i in range(int(State.duration/State.dt):
+        for i in range(int(State.duration/State.dt)):
             self.update()
         self.update_outputs()
 

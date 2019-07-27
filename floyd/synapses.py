@@ -9,7 +9,7 @@ from .matrix import pairwise_distances as distances
 from .funcs import KernelType, SamplerType
 from .groups import BaseUnitGroup
 from .delay import DelayLines
-from .specs import paramspec
+from .spec import paramspec
 from .state import State
 
 
@@ -58,9 +58,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
     base_variables = ('C', 'S', 't_spike', 'dt_spike', 'g', 'g_peak', 'p_r')
 
     def __init__(self, pre, post, spec, seed=None):
-        assert isinstance(pre, BaseUnitGroup), "'pre' is not a model group"
-        assert isinstance(post, BaseUnitGroup), "'pre' is not a model group"
-        SynapsesSpec.validate(spec)
+        SynapsesSpec().is_valid(spec)
 
         name = f'{pre.name}->{post.name}'
         BaseUnitGroup.__init__(self, (post.N, pre.N), name, spec=spec)
@@ -178,7 +176,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
             C[:int(p)] = 1
             for j in range(self.pre.N):
                 C[:,j] = self.rnd.random_shuffle(C[:,j])
-        elif isinstance(p, KernelType):
+        elif hasattr(p, 'apply'):
             self._kernel_connect(C, p, kernel_fanout, allow_multapses)
 
         # Process the connectivity matrix into some useful data structures
@@ -217,7 +215,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
                 n += round(fanout*N_post)
             else:
                 raise ValueError(f'invalid fanout value ({fanout})')
-        elif isinstance(fanout, SamplerType):
+        elif hasattr(fanout, 'sample'):
             n += fanout(N_pre).astype('i')
             n[n<0] = 0
         else:

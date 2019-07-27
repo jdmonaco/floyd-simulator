@@ -32,7 +32,7 @@ LIFNeuronSpec = paramspec('LIFNeuronSpec',
             sigma      = Param(0, 0, 1e3, 1e1, 'pA'),
             layoutspec = HexLayoutSpec,
 )
-AdExNeuronSpec = paramspec('AdExNeuronSpec', LIFNeuronSpec,
+AdExNeuronSpec = paramspec('AdExNeuronSpec', parent=LIFNeuronSpec,
             delta = Param(1, 0.25, 6, 0.05, 'mV'),
             V_t   = Param(-50, -65, -20, 1, 'mV'),
             V_thr = Param(20, -50, 20, 1, 'mV'),
@@ -74,7 +74,7 @@ class LIFNeuronGroup(BaseUnitGroup):
         self.S_inh = {}
         self.S_exc = {}
         self.synapses = {}
-        self.g = paramspec(f'{name}GainSpec',
+        self.g = paramspec(f'{name}GainSpec', instance=True,
                     **{k:Param(State.context.p[k], *gain_param)
                         for k in State.context.p.keys()
                             if k.startswith(f'g_{name}_')}

@@ -1,5 +1,5 @@
 """
-Create Markdown tables of neuron group statistics.
+Markdown tables of neuron group statistics.
 """
 
 from .state import State
@@ -8,7 +8,7 @@ from .state import State
 class MarkdownTable(object):
 
     """
-    Create a Markdown table with a template and neuron groups.
+    A Markdown table template for neuron group data.
     """
 
     def __init__(self, label, *columns, fmt='.5g', width=16):
@@ -57,12 +57,16 @@ class MarkdownTable(object):
 class TableMaker(object):
 
     """
-    Auto-update tables formatted by MarkdownTable objects.
+    Auto-updating tables formatted by MarkdownTable objects.
     """
 
     def __init__(self):
         self.tables = {}
         State.tablemaker = self
+
+    def __iter__(self):
+        for key, value in self.tables.items():
+            yield (key, value)
 
     def register(self, table):
         """

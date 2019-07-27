@@ -74,7 +74,7 @@ class BaseUnitGroup(object):
         return self.name.__format__(fmtspec)
 
     def _evaluate(self, value):
-        if isinstance(value, SamplerType):
+        if hasattr(value, 'sample'):
             return value.sample(self.shape)
         return value
 
