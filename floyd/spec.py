@@ -69,8 +69,9 @@ class Spec(object):
         """
         Spec keyword arguments are stored in the attribute dict (__dict__).
 
-        I.e., the initial constructor keywords are the only keyword values that
-        will ever be expressed by iteration.
+        I.e., the initial constructor keywords (and keywords of the optional
+        spec 'parent' object') are the only keyword values that will ever be
+        expressed by iteration.
 
         Note: If an eisting spec is supplied by keyword `spec`, then that
         spec's keyword values are consumed first, followed by the other keyword

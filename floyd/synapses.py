@@ -6,7 +6,6 @@ from toolbox.numpy import *
 from tenko.mixins import RandomMixin
 
 from .matrix import pairwise_distances as distances
-from .funcs import KernelType, SamplerType
 from .groups import BaseUnitGroup
 from .delay import DelayLines
 from .spec import paramspec
