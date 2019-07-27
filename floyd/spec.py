@@ -94,6 +94,9 @@ class Spec(object):
             if callable(spec):
                 spec = spec()
             for key, value in spec:
+                if key in spec.params:
+                    set_item(key, spec.params[key])
+                    continue
                 set_item(key, value)
 
         for key, value in keyvalues.items():
