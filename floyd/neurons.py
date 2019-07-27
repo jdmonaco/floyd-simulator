@@ -17,20 +17,21 @@ from .groups import BaseUnitGroup
 from .config import Config
 from .state import State
 
-
 LIFNeuronSpec = paramspec('LIFNeuronSpec',
-            C_m        = Param(200, 100, 300, 5, 'pF'),
-            g_L        = 25.0,
-            E_L        = -58.0,
-            E_exc      = 0.0,
-            E_inh      = -70.0,
-            I_tonic    = Param(0, 0, 1e3, 1e1, 'pA'),
-            V_r        = Param(-55, -85, -40, 1, 'mV'),
-            V_thr      = Param(-48, -50, 20, 1, 'mV'),
-            tau_ref    = Param(1, 0, 10, 1, 'ms'),
-            tau_eta    = 10.0,
-            sigma      = Param(0, 0, 1e3, 1e1, 'pA'),
-            layoutspec = HexLayoutSpec,
+            C_m         = Param(200, 50, 300, 5, 'pF'),
+            g_L         = 25.0,
+            E_L         = -58.0,
+            E_exc       = 0.0,
+            E_inh       = -70.0,
+            I_DC_mean   = Param(0, 0, 1e3, 1e1, 'pA'),
+            g_tonic_exc = Param(0, 0, 100, 1, 'nS'),
+            g_tonic_inh = Param(0, 0, 100, 1, 'nS'),
+            V_r         = Param(-55, -85, -40, 1, 'mV'),
+            V_thr       = Param(-48, -50, 20, 1, 'mV'),
+            tau_ref     = Param(1, 0, 10, 1, 'ms'),
+            tau_eta     = 10.0,
+            sigma       = Param(0, 0, 1e3, 1e1, 'pA'),
+            layoutspec  = HexLayoutSpec,
 )
 AdExNeuronSpec = paramspec('AdExNeuronSpec', parent=LIFNeuronSpec,
             delta = Param(1, 0.25, 6, 0.05, 'mV'),
@@ -46,7 +47,7 @@ class LIFNeuronGroup(BaseUnitGroup):
 
     base_dtypes = {'spikes':'?'}
     base_variables = ('x', 'y', 'v', 'spikes', 't_spike', 'g_total',
-                      'g_total_inh', 'g_total_exc', 'tonic_drive',
+                      'g_total_inh', 'g_total_exc', 'excitability',
                       'I_app', 'I_net', 'I_leak', 'I_total_inh',
                       'I_total_exc', 'I_noise')
 
@@ -158,8 +159,8 @@ class LIFNeuronGroup(BaseUnitGroup):
         """
         Update total input conductances for afferent synapses.
         """
-        self.g_total_exc = 0
-        self.g_total_inh = 0
+        self.g_total_exc = self.g_tonic_exc
+        self.g_total_inh = self.g_tonic_inh
         for gname in self.S_exc.keys():
             self.g_total_exc += self.g[gname] * self.S_exc[gname].g_total
         for gname in self.S_inh.keys():
@@ -174,7 +175,7 @@ class LIFNeuronGroup(BaseUnitGroup):
         self.I_total_exc = self.g_total_exc * (self.p.E_exc - self.v)
         self.I_total_inh = self.g_total_inh * (self.p.E_inh - self.v)
         self.I_noise     = self.p.sigma * self.eta
-        self.I_app       = self.p.I_tonic * self.tonic_drive
+        self.I_app       = self.p.I_DC_mean * self.excitability
         self.I_net       = self.I_leak + self.I_app + self.I_noise + \
                                self.I_total_exc + self.I_total_inh
 
