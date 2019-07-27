@@ -88,6 +88,8 @@ class Spec(object):
                 self.defaults[key] = value.value
                 self.params[key] = value
                 return
+            if callable(value) and value.__name__ == 'getspec':
+                value = value()
             setattr(self, key, value)
             self.defaults[key] = value
 
@@ -162,6 +164,9 @@ class Spec(object):
             if callable(spec):
                 spec = spec()
             for key, value in spec:
+                if key in spec.params:
+                    self[key] = spec.params[key]
+                    continue
                 self[key] = value
         for key, value in keyvalues.items():
             self[key] = value
