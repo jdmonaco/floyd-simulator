@@ -21,8 +21,8 @@ from .synapses import SynapsesSpec, Synapses
 from .context  import SimulatorContext
 from .delay    import DelayLines
 from .noise    import OrnsteinUhlenbeckProcess
-from .funcs    import GaussianSampler, GaussianKernel
-from .funcs    import LognormalSampler, RandomSampler
+from .samplers import *
+from .kernels  import *
 from .simplot  import SimulationPlotter
 from .traces   import RealtimeTracesPlot
 from .mdtables import MarkdownTable, TableMaker
