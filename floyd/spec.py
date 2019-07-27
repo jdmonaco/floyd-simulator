@@ -40,9 +40,9 @@ def paramspec(name, parent=None, instance=False, **defaults):
     class TempSpec(Spec): pass
     TempSpec.__name__ = name
     parent = TempSpec(spec=parent, **defaults)
-    def getspec(spec=None, **params):
+    def getspec(spec=None, **keyvalues):
         newspec = parent.copy()
-        newspec.update(spec=spec, **params)
+        newspec.update(spec=spec, **keyvalues)
         return newspec
     if instance:
         return getspec()
@@ -136,6 +136,10 @@ class Spec(object):
             setattr(self, key, value.value)
             self.params[key] = value
             return
+        if callable(value) and value.__name__ == 'getspec':
+            value = value()
+        if key in self.params:
+            self.params[key] = Param(*((value,) + self.params[key][1:]))
         setattr(self, key, value)
 
     def __iter__(self):
@@ -183,6 +187,7 @@ class Spec(object):
         """
         newspec = self.__class__(**self)
         newspec.params = self.params.copy()
+        newspec.defaults = self.defaults.copy()
         return newspec
 
     def panel_sliders(self):
