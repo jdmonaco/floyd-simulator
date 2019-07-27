@@ -101,6 +101,11 @@ class ModelRecorder(object):
 
         State.recorder = self
 
+    def __bool__(self):
+        if State.interact:
+            return True
+        return self.n < self.N_t
+
     def add_variable_monitor(self, name, data, record=True):
         """
         Add a new monitor for a data array variable.
@@ -171,12 +176,17 @@ class ModelRecorder(object):
         """
         Update the time series, variable monitors, and state monitors.
         """
+        if not self:
+            State.context.out(f'Simulation complete (n = {self.n} frames)',
+                    prefix=self.klass, warning=True)
+            return
         State.n += 1
         if State.interact:
             State.t += State.dt
             return
-        if recorder.n == 0:
+        if self.n == 0:
             State.context.hline()
+
         State.t = State.ts[State.n]
         self.progressbar()
 
@@ -199,12 +209,12 @@ class ModelRecorder(object):
                 return
 
         # Update recording index and time
-        self.n_rec += 1
-        self.t_rec = self.ts_rec[self.n_rec]
         if self.n_rec >= self.N_t_rec:
             State.context.out('Recording duration exceeded (t={:.3})',
                     self.ts_rec[-1], prefix=self.klass, warning=True)
             return
+        self.n_rec += 1
+        self.t_rec = self.ts_rec[self.n_rec]
 
         # Update data trace values
         for name, data in self.variables.items():
