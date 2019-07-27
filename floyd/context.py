@@ -9,11 +9,15 @@ except ImportError:
 
 import time
 
-from numpy import ndarray
+from panel.widgets import Toggle
+from panel.pane import Matplotlib, Markdown
+import panel as pn
 
 from tenko.context import AbstractBaseContext, step
 from tenko.mixins import RandomMixin
+from roto.dicts import merge_two_dicts
 from maps.geometry import EnvironmentGeometry
+from pouty import debug_mode
 
 from .spec import paramspec
 from .network import Network
@@ -24,66 +28,82 @@ from .config import Config
 class SimulatorContext(RandomMixin, AbstractBaseContext):
 
     """
-    Main base class for simulations.
+    Context base class for simulations.
     """
 
-    def set_simulation_parameters(self, params, **simparams):
+    def set_simulation_parameters(self, modparams=None, **simparams):
         """
         Set simulation parameters in global scope and shared state.
         """
-        # Set the defaults to a paramspec attribute and log differences
-        simparams.update(title=simparams.get('title', 'Network Simulation'))
-        SimSpec = paramspec('SimSpec', **simparams)
-        self.psim = SimSpec()
-        self.out(f'{self.psim.title} parameters:')
+        # Set the configured defaults to a paramspec attribute
+        self.psim = paramspec('SimSpec', instance=True,
+                title     = Config.title,
+                rnd_seed  = Config.rnd_seed,
+                duration  = Config.duration,
+                dt        = Config.dt,
+                dt_rec    = Config.dt_rec,
+                dt_block  = Config.dt_block,
+                blocksize = int(Config.dt_block / Config.dt),
+                figw      = Config.figw,
+                figh      = Config.figh,
+                tracewin  = Config.tracewin,
+                calcwin   = Config.calcwin,
+                interact  = Config.interact,
+                debug     = Config.debug,
+        )
+
+        # Add derived values (e.g., blocksize) to the simulation parameters
+        simparams.update(blocksize=int(simparams.get('dt_block',
+                Config.dt_block) / simparams.get('dt', Config.dt)))
+
+        # Update from model parameters and log differences with defaults
+        self.out(f'Simulation parameters:')
+        self.psim.update(**simparams)
         for name, value in self.psim:
-            if name in params:
-                self.psim[name] = params.pop(name)
+            if modparams is not None and name in modparams:
+                self.psim[name] = modparams.pop(name)
                 logmsg = f'* {name} = {self.psim[name]!r} [default: {value!r}]'
             else:
                 logmsg = f'- {name} = {value!r}'.format(name, value)
             self.out(logmsg, hideprefix=True)
 
-        # Update global scope with simulation parameters
+        # Update global scope and shared state, then write out a JSON file
+        debug_mode(self.psim.debug)
         self.get_global_scope().update(self.psim)
-
-        # Clear and update the shared state, then write out a JSON file
         reset_state()
         State.update(self.psim)
         State.context = self
         self.write_json(self.psim, 'simulation')
 
         # Initialize the 'magic' network object
-        self.out('Initializing network...')
         State.network = Network()
 
         # Display a green AnyBar dot to signal the simulation is running
-        State.context.launch_anybar()
-        State.context.set_anybar_color('green')
+        self.launch_anybar()
+        self.set_anybar_color('green')
+        self.debug(f'State = {State!r}')
 
-        self.debug(f'[set_sim_params] {State!r}')
-
-    def set_model_parameters(self, params, pfile=None, **defaults):
+    def set_model_parameters(self, params=None, pfile=None, **defaults):
         """
         Set model parameters according to file, keywords, or defaults.
 
         Note: It is required to specify default values for all parameters here.
         """
         # Set the defaults to a paramspec attribute and write to file
-        ModelSpec = paramspec('ModelSpec', **defaults)
-        self.p = ModelSpec()
-        self.write_json(self.p.as_dict(), 'defaults.json', base='context')
+        self.p = paramspec('ModelSpec', instance=True, **defaults)
+        self.write_json(self.p.as_dict(), 'defaults', base='context')
 
         # Import values from parameters file if specified
+        if params is None:
+            params = {}
         if pfile is not None:
             fpath, fparams = self.get_json(pfile)
-            fparams.update(params)
-            params = fparams
+            params = merge_two_dicts(fparams, params)
             self.out(fpath, prefix='ParameterFile')
 
         # Write file with effective parameters (i.e., kwargs > file > defaults)
-        self.p.update(**params)  # defaults are auto-saved
-        self.write_json(self.p.as_dict(), self.filename(stem='params'))
+        self.p.update(**params)
+        self.write_json(self.p.as_dict(), self.filename('params'))
 
         # Set parameters as global variables in the object's module scope
         self.out('Model parameters:')
@@ -100,6 +120,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         """
         Import environment geometry into the module and object scope.
         """
+        from numpy import ndarray
         modscope = self.get_global_scope()
         modscope['Env'] = self.e = E = EnvironmentGeometry(env)
         Ivars = list(sorted(E.info.keys()))
@@ -115,17 +136,43 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
             self.out('- {} ({})', k, 'x'.join(list(map(str, getattr(E,
                 k).shape))), prefix='Geometry', hideprefix=True)
 
+    def setup_model(self, pfile=None, **params):
+        """
+        Model construction: This must be overridden by subclasses.
+        """
+        self.set_simulation_parameters(params,
+                title    = Config.title,    # str, full simulation title
+                rnd_seed = Config.rnd_seed, # str, RNG seed (None: class name)
+                duration = Config.duration, # ms, total simulation length
+                dt       = Config.dt,       # ms, single-update timestep
+                dt_rec   = Config.dt_rec,   # ms, recording sample timestep
+                dt_block = Config.dt_block, # ms, dashboard update timestep
+                figw     = Config.figw,     # inches, main figure width
+                figh     = Config.figh,     # inches, main figure height
+                tracewin = Config.tracewin, # ms, trace plot window
+                calcwin  = Config.calcwin,  # ms, rolling calculation window
+                interact = Config.interact, # run in interactive mode
+                debug    = Config.debug,    # run in debug mode
+        )
+        self.set_model_parameters(params, pfile=pfile,
+                param1 = 1.0, # this is a model parameter default
+                param2 = 1.0, # this is another model parameter default
+        )
+        self.set_default_random_seed(rnd_seed)
+        raise NotImplementedError('models must implement setup_model()')
+
     @step
-    def simulate_movie(self, tag=None, paramfile=None, **params):
+    def create_movie(self, tag=None, pfile=None, **params):
         """
         Simulate the model in batch mode for movie generation.
         """
-        # Run the simulation as an animation in non-interactive mode
+        # Run the simulation in the non-interactive animation mode
         params.update(interact=False)
-        self.run(paramfile=paramfile, **params)
+        self.model_setup(pfile=pfile, **params)
+
         anim = FuncAnimation(
                 fig       = State.simplot.fig,
-                func      = State.network.single_update,
+                func      = State.network.animation_update,
                 init_func = State.simplot.initializer,
                 frames    = range(State.N_t),
                 interval  = int(1000/Config.fps),
@@ -144,53 +191,83 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         self.hline()
         self.play_movie()
 
-    def show_panel(self, dt=0.1, dt_block=25.0, tracewin=100.0, calcwin=25.0,
-        figsize=(12.0, 9.0)):
+    @step
+    def collect_data(self, tag=None, pfile=None, **params):
+        """
+        Simulate the model in batch mode for data collection.
+        """
+        # Run the simulation in the non-interactive data collection mode
+        params.update(interact=False)
+        self.model_setup(pfile=pfile, **params)
+
+        # Run the main loop until exhaustion
+        while State.recorder:
+            State.network.model_update()
+
+        # Save simulation data traces
+        State.recorder.save()
+
+    def launch_dashboard(self, return_panel=False, threaded=True,
+        dpi=Config.dpi, pfile=None, **params):
         """
         Construct an interactive Panel dashboard for running the model.
         """
-        self.run(
-            dt       = dt,
-            dt_block = dt_block,
-            interact = True,
-            tracewin = tracewin,
-            calcwin  = calcwin,
-            figw     = figsize[0],
-            figh     = figsize[1],
-        )
-
-        # Player widget for simulation control with block count
-        player = pn.widgets.DiscretePlayer(value='1', options=['1','2','3'],
-                interval=5000, name='Simulation Control', loop_policy='loop')
-        tictoc = pn.pane.Markdown('')
+        # Run the simulation in the interactive dashboard mode
+        params.update(interact=True)
+        self.setup_model(pfile=pfile, **params)
+        State.is_playing = False
         State.block = 0
+
+        # Play-toggle widget for simulation control with block count
+        main_figure = Matplotlib(object=State.simplot.fig, dpi=dpi)
+        # play_toggle = Toggle(name='Play', value=False, button_type='primary',
+                # sizing_mode='stretch_width')
+        tictoc = Markdown('Block -- [-- ms]')
+
+        # TODO: Figure out how to improve this mechanism for continuous
+        # simulation with play/pause control
+        player = pn.widgets.DiscretePlayer(value='1', options=['1', '2', '3'],
+                interval=5000, name='Simulation Control', loop_policy='loop')
 
         # Markdown displays for each registered table output
         table_txt = {}
         for name, table in State.tablemaker:
-            table_txt[name] = pn.pane.Markdown('')
+            table_txt[name] = Markdown(table)
 
-        @pn.depends(player.param.value)
-        def simulation(_):
+        def simulation(*events):
+            # for event in events:
+                # self.debug(event)
+
+            # if play_toggle.value == False:
+                # play_toggle.set_param(name='Play', button_type='primary')
+                # return
+            # play_toggle.set_param(name='Pause', button_type='warning')
+
             # Run a blocked update of the network with performance timing
             t0 = time.perf_counter()
-            State.network.block_update()
+            State.network.dashboard_update()
             dt = time.perf_counter() - t0
 
-            # Adapt the player interval to actual performance
-            player.interval = int(1.1e3*dt)  # ms plus some padding
-
-            # Update the tic-toc string
+            # Update the tic-toc string and block count
             tictoc_str = 'Block {} [{} ms]'.format(State.block, int(1e3*dt))
             tictoc.object = tictoc_str
-            self.out(tictoc_str, prefix='BlockCounter')
+            State.block += 1
+            self.debug(tictoc_str.lower())
 
             # Update the Markdown table objects with new data
             for label in table_txt.keys():
                 table_txt[label].object = State.tablemaker.get(label)
 
-            State.block += 1
-            return State.simplot.fig
+            # Manually trigger main figure and play-toggle button to advance
+            main_figure.param.trigger('object')
+            player.interval = int(1.05e3*dt)  # ms plus some padding
+
+            # if play_toggle.value:
+
+            # self.doc.add_next_tick_callback(
+                    # lambda: self.debug('<next tick callback>'))
+                    # lambda: play_toggle.param.trigger('value'))
+            # play_toggle.param.trigger('value')
 
         gain_row = pn.Row(
             *[pn.Column(f'### {grp.name} conductances', *grp.g.panel_sliders())
@@ -202,21 +279,35 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
 
         parameter_controls = State.network.get_panel_controls()
 
+        # play_toggle.param.watch(simulation, 'value')
+        player.param.watch(simulation, 'value')
+
         panel = \
             pn.Row(
-                pn.Column(
+                pn.WidgetBox(
                     f'## {self.psim.title}',
-                    simulation,
+                    main_figure,
                     pn.Column(player, tictoc),
+                    # pn.Column(play_toggle, tictoc),
                 ),
                 pn.Column(
                     gain_row,
                     neuron_row,
                     pn.Row(
-                        pn.Column(*tuple(table_txt.values())),
+                        pn.WidgetBox('### Model data',
+                                     *tuple(table_txt.values())),
                         parameter_controls,
                     ),
                 ),
             )
-        panel.show()  # blocking call
-        self.quit_anybar()
+
+        if return_panel:
+            return panel
+        elif threaded:
+            try:
+                panel.show(threaded=True)
+            except KeyboardInterrupt:
+                self.out('Shutting down the server...')
+                self.quit_anybar(killall=True)
+        else:
+            panel.show()  # blocking call
