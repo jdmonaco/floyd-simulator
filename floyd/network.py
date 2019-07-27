@@ -35,7 +35,7 @@ class Network(object):
         """
         from panel.widgets import Checkbox, Button, TextInput
         from panel.pane import Markdown
-        from panel import Row, Column
+        from panel import Row, Column, WidgetBox
 
         paramfile_input = TextInput(name='Filename', value='model-params')
         notes_input = TextInput(name='Notes',
@@ -135,9 +135,11 @@ class Network(object):
         # Add a client-side link between notes input and text display
         notes_input.link(notes_txt, value='object')
 
-        return Row(Column(paramfile_input, uniquify_box, filename_txt,
-                          notes_input, notes_txt),
-                   Column(*tuple(self.buttons.values())))
+        return WidgetBox(Row(
+                    Column('### Parameter files', paramfile_input,
+                           uniquify_box, filename_txt, notes_input, notes_txt),
+                    Column('### Parameter controls',
+                           *tuple(self.buttons.values()))))
 
     def unlink_widgets(self):
         """
@@ -150,34 +152,37 @@ class Network(object):
         for name, button in self.buttons.items():
             button.param.unwatch(self.watchers[name])
 
-    def block_update(self):
+    def dashboard_update(self):
         """
         For interactive mode, run a block of simulation then update outputs.
         """
-        for i in range(int(State.duration/State.dt)):
-            self.update()
-        self.update_outputs()
+        for i in range(State.blocksize):
+            self.model_update()
+            State.simplot.update_traces_data()
+        self.display_update()
 
-    def single_update(self, n=None):
+    def animation_update(self, n=None):
         """
-        For non-interactive mode, run one timestep and return updated artists.
+        For animation mode, run one timestep and return updated artists.
         """
-        self.update()
-        self.update_outputs()
+        self.model_update()
+        State.simplot.update_traces_data()
+        self.display_update()
         return State.simplot.artists
 
-    def update(self):
+    def model_update(self):
         """
         Main once-per-loop update: the recorder, neuron groups, and synapses.
         """
+        for stimulator in self.stimulators:
+            stimulator.update()
         State.recorder.update()
         for group in self.neuron_groups:
             group.update()
         for synapses in self.synapses:
             synapses.update()
-        State.simplot.update_traces_data()
 
-    def update_outputs(self):
+    def display_update(self):
         """
         Update main simulation figure (and tables in interactive mode).
         """
