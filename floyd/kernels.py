@@ -2,6 +2,9 @@
 Kernel functions.
 """
 
+__all__ = ['KernelFunc', 'GaussianKernel']
+
+
 from toolbox.numpy import *
 
 

@@ -4,7 +4,7 @@ Probabilistic sampling functions.
 
 __all__ = ['SamplerFunc', 'RandomSampler', 'GaussianSampler',
            'LognormalSampler', 'ClippedGaussianSampler',
-           'ClippedLognormalSampler']
+           'ClippedLognormalSampler', 'PositiveGaussianSampler']
 
 
 import scipy.stats as st
@@ -26,16 +26,13 @@ class SamplerFunc(object):
         self.scale = scale
 
     def __call__(self, N_or_shape):
-        return self.sample(N)
+        return self.sample(N_or_shape)
 
     def sample(self, N_or_shape):
         if isscalar(N_or_shape):
             shape = (N_or_shape,)
         else:
-            for d in N_or_shape:
-                if type(d) != int:
-                    raise ValueError(f'non-integer dimension ({N_or_shape})')
-            shape = tuple(N_or_shape)
+            shape = tuple(map(int, N_or_shape))
         return self._sample(shape)
 
     def _sample(self, shape):
