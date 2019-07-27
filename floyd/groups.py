@@ -8,8 +8,6 @@ import operator as op
 from toolbox.numpy import *
 from pouty import log
 
-from .funcs import SamplerType
-
 
 class BaseUnitGroup(object):
 
@@ -83,7 +81,7 @@ class BaseUnitGroup(object):
             getattr(self, name)[:] = self._evaluate(value)
             return
         if name == 'p' and not hasattr(value, '_speckeys'):
-            log(f'Prohibiting attempt to set \'p\' with non-spec: {p}',
+            log(f'Prohibiting attempt to set \'p\' with non-spec: {value!r}',
                     prefix=f'{self.name}UnitGroup', warning=True)
             return
         object.__setattr__(self, name, value)
