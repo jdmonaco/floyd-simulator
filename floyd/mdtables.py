@@ -65,8 +65,9 @@ class TableMaker(object):
         State.tablemaker = self
 
     def __iter__(self):
-        for key, value in self.tables.items():
-            yield (key, value)
+        self.update()
+        for name in self.tables.keys():
+            yield (name, self.get(name))
 
     def register(self, table):
         """
