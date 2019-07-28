@@ -7,6 +7,7 @@ try:
 except ImportError:
     print('Warning: install `panel` to use interactive dashboards.')
 
+import os
 import time
 
 from panel.widgets import Toggle
@@ -31,6 +32,29 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
     Context base class for simulations.
     """
 
+    def __init__(self, *args, **kwargs):
+        AbstractBaseContext.__init__(self, *args, **kwargs)
+        State.context = self
+
+    def load_parameters(self, step='collect_data', tag=None):
+        """
+        Load simulation and/or model parameter specs from a context path.
+        """
+        path = step
+        if tag is not None:
+            path += f'+{tag}'
+        path += '.json'
+        for p, specname, base in [('psim', 'SimSpec', 'simulation'),
+                                  ('p', 'ModelSpec', 'model')]:
+            stem = os.path.join(self._ctxdir, path, base)
+            try:
+                setattr(self, p, paramspec(specname, instance=True,
+                        **self.read_json(stem)))
+            except Exception as e:
+                self.out(stem, prefix='MissingJSONFile', warning=True)
+            else:
+                self.out(stem, prefix=f'{base.title()}Parameters')
+
     def set_simulation_parameters(self, modparams=None, **simparams):
         """
         Set simulation parameters in global scope and shared state.
@@ -46,6 +70,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                 blocksize = int(Config.dt_block / Config.dt),
                 figw      = Config.figw,
                 figh      = Config.figh,
+                figdpi    = Config.figdpi,
                 tracewin  = Config.tracewin,
                 calcwin   = Config.calcwin,
                 interact  = Config.interact,
@@ -73,13 +98,12 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         reset_state()
         State.update(self.psim)
         State.context = self
-        self.write_json(self.psim, 'simulation')
+        self.write_json(self.psim.as_dict(), 'simulation')
 
         # Initialize the 'magic' network object
         State.network = Network()
 
         # Display a green AnyBar dot to signal the simulation is running
-        self.launch_anybar()
         self.set_anybar_color('green')
         self.debug(f'State = {State!r}')
 
@@ -103,7 +127,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
 
         # Write file with effective parameters (i.e., kwargs > file > defaults)
         self.p.update(**params)
-        self.write_json(self.p.as_dict(), self.filename('params'))
+        self.write_json(self.p.as_dict(), 'model')
 
         # Set parameters as global variables in the object's module scope
         self.out('Model parameters:')
@@ -149,6 +173,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                 dt_block = Config.dt_block, # ms, dashboard update timestep
                 figw     = Config.figw,     # inches, main figure width
                 figh     = Config.figh,     # inches, main figure height
+                figdpi   = Config.figdpi,   # dots/inch, figure resolution
                 tracewin = Config.tracewin, # ms, trace plot window
                 calcwin  = Config.calcwin,  # ms, rolling calculation window
                 interact = Config.interact, # run in interactive mode
@@ -162,7 +187,8 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         raise NotImplementedError('models must implement setup_model()')
 
     @step
-    def create_movie(self, tag=None, pfile=None, **params):
+    def create_movie(self, tag=None, pfile=None, dpi=Config.moviedpi,
+        fps=Config.fps, **params):
         """
         Simulate the model in batch mode for movie generation.
         """
@@ -182,7 +208,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
 
         # Save the animation as a movie file
         self['movie_file'] = self.filename(tag=tag, ext='mp4')
-        anim.save(self.path(self.c.movie_file), fps=Config.fps, dpi=Config.dpi)
+        anim.save(self.path(self.c.movie_file), fps=fps, dpi=dpi)
         self.closefig()
         self.hline()
 
@@ -198,36 +224,34 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         """
         # Run the simulation in the non-interactive data collection mode
         params.update(interact=False)
-        self.model_setup(pfile=pfile, **params)
+        self.setup_model(pfile=pfile, **params)
 
         # Run the main loop until exhaustion
         while State.recorder:
             State.network.model_update()
 
         # Save simulation data traces
+        self.set_anybar_color('blue')
         State.recorder.save()
 
-    def launch_dashboard(self, return_panel=False, threaded=True,
-        dpi=Config.dpi, pfile=None, **params):
+    def launch_dashboard(self, return_panel=False, threaded=False,
+        dpi=Config.screendpi, pfile=None, **params):
         """
         Construct an interactive Panel dashboard for running the model.
         """
         # Run the simulation in the interactive dashboard mode
         params.update(interact=True)
         self.setup_model(pfile=pfile, **params)
-        State.is_playing = False
-        State.block = 0
 
-        # Play-toggle widget for simulation control with block count
+        # Main figure Matplotlib pane object will be manually updated
         main_figure = Matplotlib(object=State.simplot.fig, dpi=dpi)
-        # play_toggle = Toggle(name='Play', value=False, button_type='primary',
-                # sizing_mode='stretch_width')
-        tictoc = Markdown('Block -- [-- ms]')
 
-        # TODO: Figure out how to improve this mechanism for continuous
-        # simulation with play/pause control
+        # Set up discrete player widget for play/pause control
+        State.block = 0
+        dt_perf = int(1e3)
+        tictoc = Markdown('Block -- [-- ms]')
         player = pn.widgets.DiscretePlayer(value='1', options=['1', '2', '3'],
-                interval=5000, name='Simulation Control', loop_policy='loop')
+                interval=dt_perf, name='Simulation Control', loop_policy='loop')
 
         # Markdown displays for each registered table output
         table_txt = {}
@@ -235,21 +259,19 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
             table_txt[name] = Markdown(table)
 
         def simulation(*events):
-            # for event in events:
-                # self.debug(event)
+            nonlocal dt_perf
 
-            # if play_toggle.value == False:
-                # play_toggle.set_param(name='Play', button_type='primary')
-                # return
-            # play_toggle.set_param(name='Pause', button_type='warning')
+            # Disable the player to stop interval during block simulation
+            player.interval = int(1e6)  # ms plus some padding
+            player.param.trigger('interval')
 
             # Run a blocked update of the network with performance timing
             t0 = time.perf_counter()
             State.network.dashboard_update()
-            dt = time.perf_counter() - t0
+            dt_perf = int(1e3*(time.perf_counter() - t0))
 
             # Update the tic-toc string and block count
-            tictoc_str = 'Block {} [{} ms]'.format(State.block, int(1e3*dt))
+            tictoc_str = f'Block {State.block} [{dt_perf} ms]'
             tictoc.object = tictoc_str
             State.block += 1
             self.debug(tictoc_str.lower())
@@ -260,14 +282,10 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
 
             # Manually trigger main figure and play-toggle button to advance
             main_figure.param.trigger('object')
-            player.interval = int(1.05e3*dt)  # ms plus some padding
+            player.interval = dt_perf
+            player.param.trigger('interval')
 
-            # if play_toggle.value:
-
-            # self.doc.add_next_tick_callback(
-                    # lambda: self.debug('<next tick callback>'))
-                    # lambda: play_toggle.param.trigger('value'))
-            # play_toggle.param.trigger('value')
+        player.param.watch(simulation, 'value')
 
         gain_row = pn.Row(
             *[pn.Column(f'### {grp.name} conductances', *grp.g.panel_sliders())
@@ -277,37 +295,23 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
             *[pn.Column(f'### {grp.name} neurons', *grp.p.panel_sliders())
                 for grp in State.network.neuron_groups])
 
-        parameter_controls = State.network.get_panel_controls()
+        controls = State.network.get_panel_controls(single_column=True)
 
-        # play_toggle.param.watch(simulation, 'value')
-        player.param.watch(simulation, 'value')
-
-        panel = \
-            pn.Row(
-                pn.WidgetBox(
-                    f'## {self.psim.title}',
-                    main_figure,
-                    pn.Column(player, tictoc),
-                    # pn.Column(play_toggle, tictoc),
-                ),
-                pn.Column(
-                    gain_row,
-                    neuron_row,
-                    pn.Row(
-                        pn.WidgetBox('### Model data',
-                                     *tuple(table_txt.values())),
-                        parameter_controls,
+        panel = pn.Row(
+                    pn.WidgetBox(
+                        f'## {self.psim.title}',
+                        main_figure,
+                        pn.Row(tictoc, player),
+                        pn.Row('### Model data', *tuple(table_txt.values())),
                     ),
-                ),
-            )
+                    pn.Column(
+                        gain_row,
+                        neuron_row,
+                    ),
+                    controls,
+                )
 
         if return_panel:
             return panel
-        elif threaded:
-            try:
-                panel.show(threaded=True)
-            except KeyboardInterrupt:
-                self.out('Shutting down the server...')
-                self.quit_anybar(killall=True)
-        else:
-            panel.show()  # blocking call
+
+        panel.show(threaded=threaded)  # blocking call if threaded == True

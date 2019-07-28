@@ -8,6 +8,8 @@ import operator as op
 from toolbox.numpy import *
 from pouty import log
 
+from .spec import is_spec
+
 
 class BaseUnitGroup(object):
 
@@ -80,7 +82,7 @@ class BaseUnitGroup(object):
         if hasattr(self, 'variables') and name in self.variables:
             getattr(self, name)[:] = self._evaluate(value)
             return
-        if name == 'p' and not hasattr(value, '_speckeys'):
+        if name == 'p' and not is_spec(value):
             log(f'Prohibiting attempt to set \'p\' with non-spec: {value!r}',
                     prefix=f'{self.name}UnitGroup', warning=True)
             return

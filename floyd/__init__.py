@@ -10,6 +10,7 @@ in memoriam.
 __version__ = "0.1.0"
 
 
+from .base     import FloydObject
 from .state    import State
 from .config   import Config
 from .network  import Network
@@ -19,6 +20,8 @@ from .neurons  import LIFNeuronSpec, LIFNeuronGroup
 from .neurons  import AdExNeuronSpec, AdExNeuronGroup
 from .synapses import SynapsesSpec, Synapses
 from .context  import SimulatorContext
+from .input    import InputStimulator, Timepoint
+from .input    import step_pulse_series, triangle_wave
 from .delay    import DelayLines
 from .noise    import OrnsteinUhlenbeckProcess
 from .simplot  import SimulationPlotter

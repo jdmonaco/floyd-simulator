@@ -43,6 +43,83 @@ AdExNeuronSpec = paramspec('AdExNeuronSpec', parent=LIFNeuronSpec,
 )
 
 
+def create_LIF_int_group():
+    """
+    The Donoso LIF interneuron.
+    """
+    LIFint_spec = LIFNeuronSpec(
+        C_m     = 100.0,
+        g_L     = 10.0,
+        E_L     = -65.0,
+        E_inh   = -75.0,
+        E_exc   = 0.0,
+        V_r     = -67.0,
+        V_thr   = -52.0,
+        tau_ref = 1.0,
+    )
+    group = LIFNeuronGroup('LIF_int', LIFint_spec)
+    return group
+
+def create_AdEx_int_group():
+    """
+    The Malerba AdEx interneuron.
+    """
+    AdExint_spec = AdExNeuronSpec(
+        C_m = 200.0,
+        g_L = 10.0,
+        E_L = -70.0,
+        E_inh = -80.0,
+        E_exc = 0.0,
+        V_t = -50.0,
+        V_r = -58.0,
+        V_thr = 0.0,
+        delta = 2.0,
+        a = 2.0,
+        b = 10.0,
+        tau_w = 30.0,
+    )
+    group = AdExNeuronGroup('AdEx_int', AdExint_spec)
+    return group
+
+def create_LIF_pyr_group():
+    """
+    The Donoso LIF pyramidal cell.
+    """
+    LIFpyr_spec = LIFNeuronSpec(
+        C_m     = 275.0,
+        g_L     = 25.0,
+        E_L     = -67.0,
+        E_inh   = -68.0,
+        E_exc   = 0.0,
+        V_r     = -60.0,
+        V_thr   = -50.0,
+        tau_ref = 2.0,
+    )
+    group = LIFNeuronGroup('LIF_pyr', LIFpyr_spec)
+    return group
+
+def create_AdEx_pyr_group():
+    """
+    The Malerba AdEx pyramidal cell.
+    """
+    AdExpyr_spec = AdExNeuronSpec(
+        C_m = 200.0,
+        g_L = 10.0,
+        E_L = -58.0,
+        E_inh = -80.0,
+        E_exc = 0.0,
+        V_t = -50.0,
+        V_r = -46.0,
+        V_thr = 0.0,
+        delta = 2.0,
+        a = 2.0,
+        b = 100.0,
+        tau_w = 120.0,
+    )
+    group = AdExNeuronGroup('AdEx_pyr', AdExpyr_spec)
+    return group
+
+
 class LIFNeuronGroup(BaseUnitGroup):
 
     base_dtypes = {'spikes':'?'}
@@ -68,13 +145,14 @@ class LIFNeuronGroup(BaseUnitGroup):
             self.eta_gen = self.oup.generator()
             self.eta = next(self.eta_gen)
         else:
-            self.oup.compute(context=self.context)
-            self.eta = self.oup.eta[:,State.n]
+            self.oup.compute(context=State.context)
+            self.eta = self.oup.eta[...,0]
 
         # Initialize data structures
         self.S_inh = {}
         self.S_exc = {}
         self.synapses = {}
+        self.g = {}
         self.g = paramspec(f'{name}GainSpec', instance=True,
                     **{k:Param(State.context.p[k], *gain_param)
                         for k in State.context.p.keys()
@@ -159,8 +237,8 @@ class LIFNeuronGroup(BaseUnitGroup):
         """
         Update total input conductances for afferent synapses.
         """
-        self.g_total_exc = self.g_tonic_exc
-        self.g_total_inh = self.g_tonic_inh
+        self.g_total_exc = self.p.g_tonic_exc
+        self.g_total_inh = self.p.g_tonic_inh
         for gname in self.S_exc.keys():
             self.g_total_exc += self.g[gname] * self.S_exc[gname].g_total
         for gname in self.S_inh.keys():
@@ -186,7 +264,7 @@ class LIFNeuronGroup(BaseUnitGroup):
         if State.interact:
             self.eta = next(self.eta_gen)
             return
-        self.eta = self.oup.eta[:,State.n]
+        self.eta = self.oup.eta[...,State.n]
 
     def update_metrics(self):
         """

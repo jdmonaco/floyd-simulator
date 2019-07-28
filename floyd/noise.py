@@ -51,21 +51,24 @@ class OrnsteinUhlenbeckProcess(AutomaticCache):
         self.std = eta.std(axis=1).mean()
         self.eta = eta / self.std
 
-        if State.interact:
-            eta = empty(self.N, 'd')
-            randn = self.rnd.standard_normal(size=self.N)
-            eta[:] = randn if self.rand_init else 0
-            while True:
-                y = eta[:]
-                randn = self.rnd.standard_normal(size=self.N)
-                eta[:] = y - y*dt/tau + randn*sqrt_dt/tau
-                yield eta / self.std
-
     def generator(self):
         """
         Get a generator of standardized noise vectors for interactive mode.
         """
-        return self._compute()
+        self._compute()  # needed for standardization (cf. yield line)
+
+        tau = self.tau
+        dt = State.dt
+        sqrt_dt = sqrt(dt)
+
+        eta = empty(self.N, 'd')
+        randn = self.rnd.standard_normal(size=self.N)
+        eta[:] = randn if self.rand_init else 0
+        while True:
+            y = eta[:]
+            randn = self.rnd.standard_normal(size=self.N)
+            eta[:] = y - y*dt/tau + randn*sqrt_dt/tau
+            yield eta / self.std
 
     def progressbar(self, n, filled=False, color='ochre', width=80):
         """

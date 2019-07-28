@@ -48,11 +48,14 @@ def paramspec(name, parent=None, instance=False, **defaults):
         return getspec()
     return getspec
 
-def _isparam(p):
+def is_param(p):
     for attr in _param_attrs:
         if not hasattr(p, attr):
             return False
     return True
+
+def is_spec(s):
+    return hasattr(s, '_speckeys')
 
 
 _param_attrs = ['value', 'start', 'end', 'step', 'note']
@@ -81,20 +84,22 @@ class Spec(object):
         self.defaults = AttrDict()
         self.sliders = {}
         self.watchers = {}
-        self.out = ConsolePrinter(prefix=self.__class__.__name__)
+        self._klass = self.__class__.__name__
+        self._out = ConsolePrinter(prefix=self._klass)
+        self._debug = lambda *msg: self._out(*msg, debug=True)
 
-        def set_item(key, value):
-            if _isparam(value):
+        def set_item(key, value, source):
+            if is_param(value):
                 setattr(self, key, value.value)
                 self.defaults[key] = value.value
                 self.params[key] = value
-                self.out(f'add Param key {key!r}', debug=True)
+                self._debug(f'add Param key {key!r} from {source}')
                 return
             if callable(value) and value.__name__ == 'getspec':
                 value = value()
-                self.out(f'instantiated spec {value!r}', debug=True)
+                self._debug(f'instantiated spec {value!r} from {source}')
             setattr(self, key, value)
-            self.out(f'set key {key!r} to {value!r}', debug=True)
+            self._debug(f'set key {key!r} to {value!r} from {source}')
             self.defaults[key] = value
 
         if spec is not None:
@@ -102,12 +107,15 @@ class Spec(object):
                 spec = spec()
             for key, value in spec:
                 if key in spec.params:
-                    set_item(key, spec.params[key])
+                    set_item(key, spec.params[key], spec._klass)
                     continue
-                set_item(key, value)
+                set_item(key, value, spec._klass)
 
         for key, value in keyvalues.items():
-            set_item(key, value)
+            if type(value) is dict and '_spec_type' in value:
+                specname = value.pop('_spec_type')
+                value = paramspec(specname, instance=True, **value)
+            set_item(key, value, 'keywords')
 
         self._speckeys = tuple(self.defaults.keys())
 
@@ -127,23 +135,25 @@ class Spec(object):
 
     def __getitem__(self, key):
         if key not in self:
-            self.out(f'Unknown key: {key!r}', error=True)
+            self._out(f'Unknown key: {key!r}', error=True)
             raise KeyError(f'{key!r}')
         return getattr(self, key)
 
     def __setitem__(self, key, value):
         if key not in self:
-            self.out(f'Unknown key: {key!r}', warning=True)
+            self._out(f'Unknown key: {key!r}', warning=True)
             return
-        if _isparam(value):
+        if is_param(value):
             setattr(self, key, value.value)
             self.params[key] = value
+            self._debug(f'set key {key!r} to Param value {value!r}')
             return
-        if callable(value) and value.__name__ == 'getspec':
+        if callable(value) and getattr(value, '__name__', '_') == 'getspec':
             value = value()
         if key in self.params:
             self.params[key] = Param(*((value,) + self.params[key][1:]))
         setattr(self, key, value)
+        self._debug(f'set key {key!r} to value {value!r}')
 
     def __iter__(self):
         return self.items()
@@ -199,15 +209,15 @@ class Spec(object):
         """
         from .state import State
         if 'context' not in State:
-            self.out('Cannot create sliders outside of simulation context',
+            self._out('Cannot create sliders outside of simulation context',
                      error=True)
             return
 
         if self.sliders:
-            self.out('found old sliders', debug=True)
+            self._debug('found old sliders')
             return self.sliders
         if len(self.params) == 0:
-            self.out('found no params', debug=True)
+            self._debug('found no params')
             return ()
 
         # Construct the slider widgets
@@ -228,13 +238,12 @@ class Spec(object):
                 slider = event.obj
                 key = slider.name
                 self[key] = event.new
-                self.out(f'{key}: {event.old} -> {self[key]}', debug=True)
 
         # Register the callback with each of the sliders
         for name, slider in self.sliders.items():
             self.watchers[name] = slider.param.watch(callback, 'value')
 
-        self.out('created {} new sliders', len(self.sliders), debug=True)
+        self._debug('created {} new sliders', len(self.sliders))
         return tuple(self.sliders.values())
 
     def unlink_sliders(self):
@@ -257,6 +266,8 @@ class Spec(object):
                 self.as_dict(value, T[key])
                 continue
             T[key] = value
+        if is_spec(subtree):
+            T['_spec_type'] = self._klass
         return T
 
     @classmethod
@@ -280,14 +291,14 @@ class Spec(object):
         try:
             for key in self.defaults:
                 if key not in self:
-                    self.out(f'Missing key: {key!r}', warning=True)
+                    self._out(f'Missing key: {key!r}', warning=True)
                     valid = False
             for key in self._speckeys:
                 if key not in self.defaults:
-                    self.out(f'Invalid key: {key!r}', warning=True)
+                    self._out(f'Invalid key: {key!r}', warning=True)
                     valid = False
         except Exception as e:
-            self.out('Not a spec', warning=True)
+            self._out('Not a spec', warning=True)
             valid = False
 
         if raise_on_fail and not valid:

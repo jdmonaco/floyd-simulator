@@ -6,11 +6,22 @@ from collections import namedtuple
 
 from toolbox.numpy import *
 
+from .base import FloydObject
+from .spec import is_spec
 from .state import State
 
 
 Timepoint = namedtuple('Timepoint', ['t', 'value'])
 
+
+def step_pulse_series(N, duration, max_input):
+    """
+    Construct a series of input series from zero to a maximum level.
+    """
+    dwell = duration / N
+    t_steps = r_[linspace(0, duration - dwell, N), duration]
+    v_steps = r_[linspace(0, max_input, N), 0]
+    return tuple(Timepoint(t, v) for t, v in zip(t_steps, v_steps))
 
 def triangle_wave(t0, p):
     """
@@ -22,26 +33,30 @@ def triangle_wave(t0, p):
     return 0.5 + (1/a) * (t - a*b) * (-1)**b
 
 
-class InputStimulator(object):
+class InputStimulator(FloydObject):
 
     """
     Generate one-off or repeating temporal input stimulus patterns.
     """
 
-    def __init__(self, target, variable, *timepoints, stimulate=None,
-        repeat=False, repeat_until=None):
+    def __init__(self, target, variable, *timepoints, state_key=None,
+        stimulate=None, repeat=False, repeat_until=None):
         """
         Target object variable is manipulated according to Timepoint tuples.
 
         Note: val can be 'off' to disable updating until the next time point.
         """
+        FloydObject.__init__(self)
         self.target = target
         self.variable = variable
-        assert hasattr(target, variable), f"no target attribute ('{variable}')"
+        self.state_key = state_key
+
+        assert hasattr(target, variable), f'no target attribute ({variable!r})'
 
         # Process `stimulate` as an index for array target variables
         self.index = None
         self.is_array = isinstance(getattr(target, variable), ndarray)
+        self.is_target_spec = is_spec(target)
         if self.is_array:
             if stimulate is None:
                 self.index = slice(None)
@@ -50,8 +65,7 @@ class InputStimulator(object):
                     getattr(target, variable)[stimulate]
                 except IndexError as e:
                     State.context.out('bad target index for {}.{}'.format(
-                        target, variable), prefix=self.__class__.__name__,
-                        error=True)
+                        target, variable), prefix=self.klass, error=True)
                     raise e
                 else:
                     self.index = stimulate
@@ -61,6 +75,7 @@ class InputStimulator(object):
                            sorted(timepoints, key=lambda x: x[0])]
         self.t = array([tp.t for tp in self.timepoints])
         self.N = len(self.timepoints)
+        self.previous = -1
 
         # Set up the repeat variables
         self.cycles = 1
@@ -72,22 +87,27 @@ class InputStimulator(object):
             self.cycles = repeat
         self.delivered = 0
         self.exhausted = False
+        self.exhausted_printed = False
 
         State.network.add_stimulator(self)
 
     def __str__(self):
         if hasattr(self.target, 'name'):
-            tname = f'\'{self.target.name}\''
+            tname = f'{self.target.name!r}'
         else:
-            tname = self.__class__.__name__
-        varname = f'\'{self.variable}\''
-        return f'{self.__class__.__name__}(target={tname}, variable={varname})'
+            tname = f'{self.target.__class__.__name__}'
+        varname = f'{self.variable!r}'
+        return f'{self.klass}(target={tname}, variable={varname})'
 
     def update(self):
         """
         Update the target variable with the current stimulator value.
         """
         if self.exhausted:
+            if self.exhausted_printed:
+                return
+            self.out(f'Stimulation protocol exhausted (t = {State.t:.3f} ms)')
+            self.exhausted_printed = True
             return
 
         # Wrap simulation time around the range of timepoints and check whether
@@ -99,7 +119,8 @@ class InputStimulator(object):
 
         # Get the most recent timepoint and elapsed time since it started
         i = nz[-1]
-        dt = t_mod - self.t[i]
+        t0 = self.t[i]
+        dt = t_mod - t0
 
         # Perform the stimulation based on a value or function call
         tp = self.timepoints[i]
@@ -108,8 +129,17 @@ class InputStimulator(object):
             value = value(dt)
         if self.is_array:
             getattr(self.target, self.variable)[self.index] = value
+        elif self.is_target_spec:
+            self.target[self.variable] = value
         else:
             setattr(self.target, self.variable, value)
+        if self.state_key is not None:
+            State[self.state_key] = value
+
+        # Print message for passing each timepoint
+        if i != self.previous:
+            self.debug(f'timepoint: stim({t0:.3f}) = {value!r}')
+            self.previous = i
 
         # Determine whether the end of the stimulation protocol was reached
         if i == self.N - 1:

@@ -8,28 +8,29 @@ import functools
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from pouty import debug
-
+from .base import FloydObject
 from .state import State
 
 
-class Network(object):
+class Network(FloydObject):
 
     """
     Container for neuron groups, synapses, and other simulation elements.
     """
 
     def __init__(self):
+        FloydObject.__init__(self)
+
         self.neuron_groups = []
         self.synapses = []
         self.stimulators = []
         self.buttons = {}
         self.watchers = {}
         self.G = nx.DiGraph()
-
         State.network = self
+        self.debug('network initialized')
 
-    def get_panel_controls(self):
+    def get_panel_controls(self, single_column=False):
         """
         Get a Panel Row of controls for network parameters.
         """
@@ -66,9 +67,8 @@ class Network(object):
                     dt = t_now - t_last
                     t_last = t_now
                     if dt < dt_min:
-                        State.context.debug(
-                                '{}: skipping repeat call (dt = {:.2f} s)',
-                                func.__name__, dt)
+                        self.debug('{}: skipping repeat call (dt = {:.2f} s)',
+                                   func.__name__, dt)
                         return
                     func(value)
                 return wrapper
@@ -78,7 +78,7 @@ class Network(object):
         @throttle(10.0)
         def save(value):
             State.context.toggle_anybar()
-            State.context.debug('save button callback')
+            self.debug('save button callback')
             psavefn = paramfile_input.value
             unique = uniquify_box.value
             params = dict(notes=notes_input.value)
@@ -94,7 +94,7 @@ class Network(object):
         @throttle
         def restore(value):
             State.context.toggle_anybar()
-            State.context.debug('restore button callback')
+            self.debug('restore button callback')
             psavefn = paramfile_input.value
             fullpath, params = State.context.get_json(psavefn)
             filename_txt.object = fullpath
@@ -111,7 +111,7 @@ class Network(object):
         @throttle
         def defaults(value):
             State.context.toggle_anybar()
-            State.context.debug('defaults button callback')
+            self.debug('defaults button callback')
             for grp in self.neuron_groups:
                 for which in 'gp':
                     spec = getattr(grp, which)
@@ -121,7 +121,7 @@ class Network(object):
         @throttle
         def zero(value):
             State.context.toggle_anybar()
-            State.context.debug('zero button callback')
+            self.debug('zero button callback')
             for grp in self.neuron_groups:
                 for slider in grp.g.sliders.values():
                     slider.value = 0.0
@@ -135,11 +135,15 @@ class Network(object):
         # Add a client-side link between notes input and text display
         notes_input.link(notes_txt, value='object')
 
-        return WidgetBox(Row(
-                    Column('### Parameter files', paramfile_input,
-                           uniquify_box, filename_txt, notes_input, notes_txt),
-                    Column('### Parameter controls',
-                           *tuple(self.buttons.values()))))
+        # Create separete columns to construct as a final row or column
+        file_column = Column('### Parameter files', paramfile_input,
+                          uniquify_box, filename_txt, notes_input, notes_txt)
+        control_column = Column('### Parameter controls',
+                             *tuple(self.buttons.values()))
+
+        if single_column:
+            return WidgetBox(control_column, file_column)
+        return WidgetBox(Row(file_column, control_column))
 
     def unlink_widgets(self):
         """
@@ -174,9 +178,12 @@ class Network(object):
         """
         Main once-per-loop update: the recorder, neuron groups, and synapses.
         """
+        State.recorder.update()
         for stimulator in self.stimulators:
             stimulator.update()
-        State.recorder.update()
+        if not State.recorder:
+            return
+
         for group in self.neuron_groups:
             group.update()
         for synapses in self.synapses:
@@ -203,6 +210,7 @@ class Network(object):
         """
         self.neuron_groups.append(group)
         self.G.add_node(group)
+        self.debug('added neuron group: {group!s}')
 
     def add_synapses(self, synapses):
         """
@@ -211,6 +219,7 @@ class Network(object):
         self.synapses.append(synapses)
         synapses.post.add_synapses(synapses)
         self.G.add_edge(synapses.pre, synapses.post, synapses=synapses)
+        self.debug('added synapses: {synapses!s}')
 
     def add_stimulator(self, stimulator):
         """
@@ -218,15 +227,16 @@ class Network(object):
         """
         self.stimulators.append(stimulator)
         self.G.add_edge(stimulator, stimulator.target)
+        self.debug(f'added stimulator: {stimulator!s}')
 
     def display_neural_connectivity(self):
         """
         Print out detailed fanin/fanout statistics for each projection.
         """
-        State.context.hline()
+        self._out.hline()
         for S in self.synapses:
             S.connectivity_stats()
-            State.context.hline()
+            self._out.hline()
 
     def group_items(self):
         """

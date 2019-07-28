@@ -5,11 +5,12 @@ Record state, model variables, and spike/event data across a simulation.
 import numpy as np
 import pandas as pd
 
+from .base import FloydObject
 from .state import State
 from .config import Config
 
 
-class ModelRecorder(object):
+class ModelRecorder(FloydObject):
 
     """
     Automatic recording of state, model variables, and spike/event timing.
@@ -23,7 +24,7 @@ class ModelRecorder(object):
     variables use the same data buffers throughout the simulation.
 
     (3) Initial values to the constructor may be non-boolean arrays
-    (variables), boolean arrays (spike/event), or scalars (simulation state).
+    (variables), boolean arrays (spike/event), or keys (simulation state).
     Further, the value may be a tuple with two elements: (1) a data array as
     described in the last sentence, and (2) a `record` value to be passed to
     one of the `add_*_monitor` methods as described in note #4.
@@ -38,7 +39,7 @@ class ModelRecorder(object):
     passed in.
     """
 
-    def __init__(self, **initial_values):
+    def __init__(self, show_progress=True, **initial_values):
         """
         Add recording monitors for keyword-specified variables and states.
 
@@ -49,7 +50,7 @@ class ModelRecorder(object):
         saved to the context datafile in the `save_recordings` method.
         """
         assert State.dt_rec >= State.dt, 'recording interval < simulation dt'
-        self.klass = self.__class__.__name__
+        FloydObject.__init__(self)
 
         # Simulation time & progress tracking
         State.ts = np.arange(0, State.duration + State.dt, State.dt)
@@ -57,6 +58,7 @@ class ModelRecorder(object):
         State.n = -1  # simulation frame index, flag for unstarted simulation
         State.t = -State.dt
         self.Nprogress = 0
+        self.show_progress = show_progress and not State.debug
 
         # Recording time tracking
         self.ts_rec = np.arange(0, State.duration + State.dt_rec, State.dt_rec)
@@ -83,8 +85,7 @@ class ModelRecorder(object):
             record = True
             if type(data) is tuple:
                 if len(data) != 2:
-                    State.context.out('Tuple values must be length 2',
-                            prefix=self.klass, warning=True)
+                    self.out('Tuple values must have length 2', warning=True)
                     continue
                 data, record = data
 
@@ -94,26 +95,36 @@ class ModelRecorder(object):
                 else:
                     self.add_variable_monitor(name, data, record=record)
             elif np.isscalar(data):
-                self.add_state_monitor(name, data)
+                try:
+                    state_value = float(data)
+                except ValueError:
+                    self.out('Not a scalar number: {!r}', data, warning=True)
+                    continue
+                else:
+                    self.add_state_monitor(name, state_value)
             else:
-                State.context.out('Not an array or scalar state ({})', data,
-                        prefix=self.klass, warning=True)
+                self.out('Not an array or state: {!r}', data, warning=True)
 
         State.recorder = self
 
     def __bool__(self):
         if State.interact:
             return True
-        return self.n < self.N_t
+        return State.n < State.N_t
+
+    def _new_monitor_check(self, name):
+        assert State.n == -1, 'simulation has already started'
+        exists = f'monitor exists ({name!r})'
+        assert name not in self.variables, f'variable {exists}'
+        assert name not in self.events, f'spike/event {exists}'
+        assert name not in self.state_traces, f'state {exists}'
+        assert type(name) is str, 'data name must be a string'
 
     def add_variable_monitor(self, name, data, record=True):
         """
         Add a new monitor for a data array variable.
         """
-        assert self.n == -1, 'simulation has already started'
-        assert name not in self.variables, f'monitor exists ({name})'
-        assert name not in self.events, f'event monitor exists ({name})'
-        assert type(name) is str, 'variable name must be a string'
+        self._new_monitor_check(name)
         assert type(data) is np.ndarray, 'variable data must be an array'
 
         if type(record) is bool and record == True:
@@ -127,8 +138,12 @@ class ModelRecorder(object):
             raise ValueError(f'invalid record value ({record})')
         rdata = data[sl]
 
-        self.traces[name] = np.zeros((self.N_t_rec,) + rdata.shape, data.dtype)
+        dtype = data.dtype
+        self.traces[name] = np.zeros((self.N_t_rec,) + rdata.shape, dtype)
         self.variables[name] = data
+
+        self.debug(f'added variable monitor: {name!r}, dtype={dtype!r}, '
+                   f'record={record!r}')
 
     def add_spike_monitor(self, name, data, record=True):
         """
@@ -137,10 +152,7 @@ class ModelRecorder(object):
         Note: Set `record` to a list of indexes (for axis 0 of data)
         or a scalar integer index for selective recordings.
         """
-        assert self.n == -1, 'simulation has already started'
-        assert name not in self.events, f'spike/event monitor exists ({name})'
-        assert name not in self.variables, f'monitor with same name ({name})'
-        assert type(name) is str, 'spike/event name must be a string'
+        self._new_monitor_check(name)
         assert type(data) is np.ndarray, 'spike/event data must be an array'
         assert data.dtype == bool, 'spike/event data must be boolean'
 
@@ -160,31 +172,34 @@ class ModelRecorder(object):
         self.unit_indexes[name] = np.arange(data.shape[0])[sl]
         self.events[name] = data
 
-    def add_state_monitor(self, name, value):
+        self.debug(f'added spike/events monitor: {name!r}, '
+                   f'record={self.unit_slices[name]!r}')
+
+    def add_state_monitor(self, name, state_value):
         """
         Add a new monitor for a state value (scalars of any type).
         """
-        assert State.n == -1, 'simulation has already started'
-        assert name not in State, f'state monitor exists ({name})'
-        assert type(name) is str, 'variable name must be a string'
-        assert np.size(value) == 1, 'state must be a scalar value'
+        self._new_monitor_check(name)
+        assert np.ndim(state_value) == 0, 'state value must be scalar'
 
-        self.state_traces[name] = np.zeros(self.N_t, np.array(value).dtype)
-        State[name] = value
+        dtype = np.array(state_value).dtype
+        self.state_traces[name] = np.zeros(self.N_t_rec, dtype)
+        State[name] = state_value
+
+        self.debug(f'added state monitor: {name!r}, dtype={dtype!r}')
 
     def update(self):
         """
         Update the time series, variable monitors, and state monitors.
         """
-        if not self:
-            State.context.out(f'Simulation complete (n = {self.n} frames)',
-                    prefix=self.klass, warning=True)
-            return
         State.n += 1
+        if not self:
+            self.out(f'Simulation complete (n = {State.n})', anybar='green')
+            return
         if State.interact:
             State.t += State.dt
             return
-        if self.n == 0:
+        if State.n == 0:
             State.context.hline()
 
         State.t = State.ts[State.n]
@@ -210,8 +225,7 @@ class ModelRecorder(object):
 
         # Update recording index and time
         if self.n_rec >= self.N_t_rec:
-            State.context.out('Recording duration exceeded (t={:.3})',
-                    self.ts_rec[-1], prefix=self.klass, warning=True)
+            self.out('Recording complete (t = {:.3f})', self.ts_rec[-1])
             return
         self.n_rec += 1
         self.t_rec = self.ts_rec[self.n_rec]
@@ -224,11 +238,14 @@ class ModelRecorder(object):
         for name in self.state_traces.keys():
             self.state_traces[name][self.n_rec] = State[name]
 
+        self.debug(f'record @ t = {self.t_rec:.3f} ms')
+
     def progressbar(self, filled=False, color='purple'):
         """
         Once-per-update console output for a simulation progress bar.
         """
         if State.interact: return
+        if not self.show_progress: return
         State.progress = pct = (State.n + 1) / State.N_t
         barpct = self.Nprogress / Config.progress_width
         while barpct < pct:
@@ -246,9 +263,7 @@ class ModelRecorder(object):
             State.context.save_dataframe(df, *path, name, **root)
 
         if State.interact:
-            State.context.out(
-                    'No variable/state recordings in interactive mode',
-                    prefix=self.klass, warning=True)
+            self.out('No recordings in interactive mode', warning=True)
             return
 
         State.context.save_array(self.ts_rec, *path, 't', **root)

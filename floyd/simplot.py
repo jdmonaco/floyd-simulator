@@ -26,7 +26,8 @@ class SimulationPlotter(object):
         self.nrows = nrows
         self.ncols = ncols
         self.figsize = (State.figw, State.figh)
-        self.fig = plt.figure(num='simplot', clear=True, figsize=self.figsize)
+        self.fig = plt.figure(num='simplot', clear=True, figsize=self.figsize,
+                              dpi=State.figdpi)
         self.gs = GridSpec(nrows, ncols, self.fig, 0, 0, 1, 1, 0, 0)
         self.axes = {}
         self.axes_objects = []

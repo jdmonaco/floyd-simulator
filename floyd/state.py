@@ -31,4 +31,5 @@ State.tracewin  = 100.0
 State.calcwin   = 25.0
 State.figw      = 8
 State.figh      = 6
+State.figdpi    = 144
 State.interact  = False
