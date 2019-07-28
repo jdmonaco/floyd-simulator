@@ -81,16 +81,20 @@ class Spec(object):
         self.defaults = AttrDict()
         self.sliders = {}
         self.watchers = {}
+        self.out = ConsolePrinter(prefix=self.__class__.__name__)
 
         def set_item(key, value):
             if _isparam(value):
                 setattr(self, key, value.value)
                 self.defaults[key] = value.value
                 self.params[key] = value
+                self.out(f'add Param key {key!r}', debug=True)
                 return
             if callable(value) and value.__name__ == 'getspec':
                 value = value()
+                self.out(f'instantiated spec {value!r}', debug=True)
             setattr(self, key, value)
+            self.out(f'set key {key!r} to {value!r}', debug=True)
             self.defaults[key] = value
 
         if spec is not None:
@@ -106,7 +110,6 @@ class Spec(object):
             set_item(key, value)
 
         self._speckeys = tuple(self.defaults.keys())
-        self.out = ConsolePrinter(prefix=self.__class__.__name__)
 
     def __repr__(self):
         indent = ' '*4
@@ -194,6 +197,12 @@ class Spec(object):
         """
         Return a tuple of Panel FloatSlider objects for Param values.
         """
+        from .state import State
+        if 'context' not in State:
+            self.out('Cannot create sliders outside of simulation context',
+                     error=True)
+            return
+
         if self.sliders:
             self.out('found old sliders', debug=True)
             return self.sliders
