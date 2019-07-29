@@ -1,126 +1,19 @@
 """
-Groups of neurons for network models.
+Base class for conductance-based model neuron groups.
 """
-
-try:
-    import panel as pn
-except ImportError:
-    print('Warning: install `panel` to use interactive dashboards.')
 
 from toolbox.numpy import *
 
-from .layout import HexagonalDiscLayout as HexLayout, HexLayoutSpec
-from .noise import OrnsteinUhlenbeckProcess as OUProcess
-from .activity import FiringRateWindow
-from .spec import paramspec, Param
-from .groups import BaseUnitGroup
-from .config import Config
-from .state import State
-
-LIFNeuronSpec = paramspec('LIFNeuronSpec',
-            C_m         = Param(200, 50, 300, 5, 'pF'),
-            g_L         = 25.0,
-            E_L         = -58.0,
-            E_exc       = 0.0,
-            E_inh       = -70.0,
-            I_DC_mean   = Param(0, 0, 1e3, 1e1, 'pA'),
-            g_tonic_exc = Param(0, 0, 100, 1, 'nS'),
-            g_tonic_inh = Param(0, 0, 100, 1, 'nS'),
-            V_r         = Param(-55, -85, -40, 1, 'mV'),
-            V_thr       = Param(-48, -50, 20, 1, 'mV'),
-            tau_ref     = Param(1, 0, 10, 1, 'ms'),
-            tau_eta     = 10.0,
-            sigma       = Param(0, 0, 1e3, 1e1, 'pA'),
-            layoutspec  = HexLayoutSpec,
-)
-AdExNeuronSpec = paramspec('AdExNeuronSpec', parent=LIFNeuronSpec,
-            delta = Param(1, 0.25, 6, 0.05, 'mV'),
-            V_t   = Param(-50, -65, -20, 1, 'mV'),
-            V_thr = Param(20, -50, 20, 1, 'mV'),
-            a     = Param(2, 0, 10, 0.1, 'nS'),
-            b     = Param(100, 0, 200, 5, 'pA'),
-            tau_w = Param(30, 1, 300, 1, 'ms'),
-)
+from ..layout import get_layout_from_spec
+from ..noise import OrnsteinUhlenbeckProcess as OUProcess
+from ..activity import FiringRateWindow
+from ..spec import paramspec, Param
+from ..groups import BaseUnitGroup
+from ..config import Config
+from ..state import State
 
 
-def create_LIF_int_group():
-    """
-    The Donoso LIF interneuron.
-    """
-    LIFint_spec = LIFNeuronSpec(
-        C_m     = 100.0,
-        g_L     = 10.0,
-        E_L     = -65.0,
-        E_inh   = -75.0,
-        E_exc   = 0.0,
-        V_r     = -67.0,
-        V_thr   = -52.0,
-        tau_ref = 1.0,
-    )
-    group = LIFNeuronGroup('LIF_int', LIFint_spec)
-    return group
-
-def create_AdEx_int_group():
-    """
-    The Malerba AdEx interneuron.
-    """
-    AdExint_spec = AdExNeuronSpec(
-        C_m = 200.0,
-        g_L = 10.0,
-        E_L = -70.0,
-        E_inh = -80.0,
-        E_exc = 0.0,
-        V_t = -50.0,
-        V_r = -58.0,
-        V_thr = 0.0,
-        delta = 2.0,
-        a = 2.0,
-        b = 10.0,
-        tau_w = 30.0,
-    )
-    group = AdExNeuronGroup('AdEx_int', AdExint_spec)
-    return group
-
-def create_LIF_pyr_group():
-    """
-    The Donoso LIF pyramidal cell.
-    """
-    LIFpyr_spec = LIFNeuronSpec(
-        C_m     = 275.0,
-        g_L     = 25.0,
-        E_L     = -67.0,
-        E_inh   = -68.0,
-        E_exc   = 0.0,
-        V_r     = -60.0,
-        V_thr   = -50.0,
-        tau_ref = 2.0,
-    )
-    group = LIFNeuronGroup('LIF_pyr', LIFpyr_spec)
-    return group
-
-def create_AdEx_pyr_group():
-    """
-    The Malerba AdEx pyramidal cell.
-    """
-    AdExpyr_spec = AdExNeuronSpec(
-        C_m = 200.0,
-        g_L = 10.0,
-        E_L = -58.0,
-        E_inh = -80.0,
-        E_exc = 0.0,
-        V_t = -50.0,
-        V_r = -46.0,
-        V_thr = 0.0,
-        delta = 2.0,
-        a = 2.0,
-        b = 100.0,
-        tau_w = 120.0,
-    )
-    group = AdExNeuronGroup('AdEx_pyr', AdExpyr_spec)
-    return group
-
-
-class LIFNeuronGroup(BaseUnitGroup):
+class COBANeuronGroup(BaseUnitGroup):
 
     base_dtypes = {'spikes':'?'}
     base_variables = ('x', 'y', 'v', 'spikes', 't_spike', 'g_total',
@@ -132,9 +25,10 @@ class LIFNeuronGroup(BaseUnitGroup):
         """
         Construct the neuron group by computing layouts and noise.
         """
-        # Compute (or retrieve) the spatial layout to get the number of units
-        self.layout = HexLayout(spec.layoutspec)
-        self.layout.compute(context=State.context)
+        # Get the spatial layout to get the number of units
+        if spec.layout is None:
+            raise ValueError('layout required to determine group size')
+        self.layout = get_layout_from_spec(spec.layout)
         self.N = self.layout.N
 
         BaseUnitGroup.__init__(self, self.N, name, spec=spec)
@@ -168,23 +62,20 @@ class LIFNeuronGroup(BaseUnitGroup):
         self.t_spike = -inf
         self.LFP_uV = 0.0  # uV, LFP signal from summed net synaptic input
 
-        # Pre-compute intermediate values
-        self.dt_over_C_m = State.dt / self.p.C_m
-
         # Map from transmitters to reversal potentials
         self.E_syn = dict(GABA=self.p.E_inh, AMPA=self.p.E_exc,
                 NMDA=self.p.E_exc, glutamate=self.p.E_exc, L=self.p.E_exc)
 
         State.network.add_neuron_group(self)
-        State.context.out(self, prefix='NeuronInit')
+        self.out(self)
 
     def add_synapses(self, synapses):
         """
         Add afferent synaptic pathway to this neuron group.
         """
         if synapses.post is not self:
-            State.context.out('{} does not project to {}', synapses.name,
-                    self.name, prefix='NeuronGroup', error=True)
+            self.out('{} does not project to {}', synapses.name, self.name,
+                    error=True)
             return
 
         # Add synapses to list of inhibitory or excitatory afferents
@@ -207,6 +98,7 @@ class LIFNeuronGroup(BaseUnitGroup):
         """
         self.update_voltage()
         self.update_spiking()
+        self.update_adaptation()
         self.update_conductances()
         self.update_currents()
         self.update_noise()
@@ -216,7 +108,7 @@ class LIFNeuronGroup(BaseUnitGroup):
         """
         Evolve the membrane voltage for neurons according to input currents.
         """
-        self.v += self.dt_over_C_m * self.I_net
+        self.v += (State.dt / self.p.C_m) * self.I_net
 
     def update_spiking(self):
         """
@@ -232,6 +124,12 @@ class LIFNeuronGroup(BaseUnitGroup):
 
         # Update most-recent spike time for units that spiked
         self.t_spike[self.spikes] = State.t
+
+    def update_adaptation(self):
+        """
+        Update any adaptation variables after spikes are computed.
+        """
+        pass
 
     def update_conductances(self):
         """
@@ -270,13 +168,13 @@ class LIFNeuronGroup(BaseUnitGroup):
         """
         Update metrics such as activity calculations.
         """
-        self.LFP_uV = -(self.I_total_exc.sum() + self.I_total_inh.sum()) \
-                            / Config.g_LFP
+        self.LFP_uV = -(
+                self.I_total_exc.sum() + self.I_total_inh.sum()) / Config.g_LFP
         self.activity.update()
 
     def reset(self):
         """
-        Reset the neuron model parameters to spec defaults.
+        Reset the neuron model and gain parameters to spec defaults.
         """
         self.p.reset()
         self.g.reset()
@@ -298,37 +196,3 @@ class LIFNeuronGroup(BaseUnitGroup):
         Return the active fraction in the calculation window.
         """
         return self.activity.get_activity()
-
-
-class AdExNeuronGroup(LIFNeuronGroup):
-
-    extra_variables = ('w',)
-
-    def update(self):
-        """
-        Update the model neurons.
-        """
-        self.update_voltage()
-        self.update_spiking()
-        self.update_adaptation()
-        self.update_conductances()
-        self.update_currents()
-        self.update_noise()
-        self.update_metrics()
-
-    def update_voltage(self):
-        """
-        Evolve the membrane voltage for neurons according to input currents.
-        """
-        self.v += self.dt_over_C_m * (
-              self.p.g_L*self.p.delta*exp((self.v - self.p.V_t)/self.p.delta)
-              + self.I_net
-        )
-
-    def update_adaptation(self):
-        """
-        Update the adaptation variable after spikes are computed.
-        """
-        self.w[self.spikes] += self.p.b
-        self.w += (State.dt/self.p.tau_w) * (
-                                    self.p.a*(self.v - self.p.V_r) - self.w)
