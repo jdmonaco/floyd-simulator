@@ -2,18 +2,19 @@
 Input/output relationship for neurons.
 """
 
-from toolbox.numpy import *
-from floyd import *
+from functools import partial
 
+from toolbox.numpy import *
 from roto.plots import shaded_error
 
-from .neurons import create_LIF_int_spec, create_LIF_pyr_spec
-from .neurons import create_AdEx_int_spec, create_AdEx_pyr_spec
+from ..neurons.gallery import *
+from ..layout import HexagonalDiscLayout as HexLayout
 
-from . import SharpwavesContext, step
+from . import FloydContext, step
+from .. import *
 
 
-class NeuronEvaluation(SharpwavesContext):
+class InputOutputCurves(FloydContext):
 
     """
     Evaluate the f-I curves for Grace and Kechen.
@@ -21,7 +22,8 @@ class NeuronEvaluation(SharpwavesContext):
 
     def setup_model(self, pfile=None, **params):
         self.set_simulation_parameters(params,
-            title    = f"Analysis of {params['groupname']} Neuron Group",
+            title    = f"Analysis of {params['modeltype']}/"
+                       f"{params['neurontype']} Neurons",
             rnd_seed = None,   # str, RNG seed (None: class name)
             duration = 5000.0, # ms, total simulation length
             dt       = 0.1,    # ms, single-update timestep
@@ -36,45 +38,111 @@ class NeuronEvaluation(SharpwavesContext):
         )
         self.set_model_parameters(params, pfile=pfile,
             N_pulses    = 33,     # number of test pulses
+            N_ex_cells  = 5,      # number of examples cells for traces
             max_current = 1000.0, # pA, peak pulse stimulation
-            groupspec   = None,   # NeuronSpec object
-            groupname   = None,   # neuron group name
-            neurontype  = None,   # neuron group type string
+            modeltype   = 'LIF',  # 'LIF', 'AdEx'
+            neurontype  = 'int',  # 'int', 'pyr'
             CA_spacing  = 0.031,  # mm, 0.1 cf. Taxidis
             CA_radius   = 0.220,  # mm, CA3/1 disc radius
         )
 
-        # Set up the hexagonal CA layout for the neurons
-        groupspec.update(layoutspec=HexLayoutSpec(
+        # Create the hexagonal disc layout spec for the group
+        layout = HexLayout.get_spec(
             scale       = CA_spacing,
             radius      = CA_radius,
             origin      = (CA_radius,)*2,
             extent      = (0, 2*CA_radius, 0, 2*CA_radius),
             orientation = pi/6,
-        ))
-
-        # Create the neuron group based on the spec and name
-        if neurontype == 'LIF':
-            NeuronGroup = LIFNeuronGroup
-        elif neurontype == 'AdEx':
-            NeuronGroup = AdExNeuronGroup
-        else:
-            raise ValueError(f'unknown neuron type: {neurontype!r}')
-        group = NeuronGroup(groupname, groupspec)
-        group.set(
-                v=groupspec.E_L,
-                excitability=PositiveGaussianSampler(1.0, 0.1),
         )
 
-        # Create the step-pulse DC-current stimulator
-        step_series = step_pulse_series(N_pulses, duration, max_current)
-        stim = InputStimulator(group.p, 'I_DC_mean', *step_series,
-                               state_key='I_app', repeat=True)
-        self.save_array(step_series, 'stimulus_series')
+        # Create the neuron group based on model and neuron types
+        params = dict(layout=layout)
+        key = (modeltype, neurontype)
+        if key == ('LIF', 'int'):
+            group = create_LIF_interneurons(**params)
+        elif key == ('LIF', 'pyr'):
+            group = create_LIF_pyramids(**params)
+        elif key == ('AdEx', 'int'):
+            group = create_AdEx_interneurons(**params)
+        elif key == ('AdEx', 'pyr'):
+            group = create_AdEx_pyramids(**params)
+        else:
+            raise ValueError(f'unknown neuron model: {key!r}')
 
-        # Create the model recorder
-        recorder = ModelRecorder(show_progress=False, spikes=group.spikes,
-                                 v=group.v, net=group.I_net, I_app=0.0)
+        # Initialize voltage and hetergeneous excitability
+        group.set(
+                v = group.p.E_L,
+                excitability = PositiveGaussianSampler(1.0, 0.1),
+        )
+        self.debug(group.excitability)
+
+        # Create the step-pulse DC-current stimulator
+        pulses = step_pulse_series(N_pulses, duration, max_current)
+        stim = InputStimulator(group.p, 'I_DC_mean', *pulses,
+                               state_key='I_app', repeat=True)
+        if self.current_step() == 'collect_data':
+            self.save_array(pulses, 'stimulus_series')
+
+        # Create the model recorder, figure, and tables
+        recorder = ModelRecorder(
+                spikes = group.spikes,
+                v      = group.v,
+                net    = group.I_net,
+                I_app  = 0.0,
+        )
+
+        # Create markdown tables for input and output values
+        tablemaker = TableMaker()
+        tablemaker.add_markdown_table('output',
+                ('Rate (sp/s)', lambda g: g.mean_rate()),
+                ('Activity (frac)', lambda g: g.active_fraction()),
+                fmt='.4g',
+        )
+
+        # Create grid of axes in the figure
+        simplot = SimulationPlotter(2, 2)
+        simplot.set_axes(
+                stim    = simplot.gs[0,0],
+                voltage = simplot.gs[0,1],
+                rate    = simplot.gs[1,0],
+                net     = simplot.gs[1,1],
+        )
+        simplot.get_axes('voltage').set_ylim(group.p.E_inh - 10,
+                                             group.p.V_thr + 20)
+
+        # Initialize stimulation current trace plot
+        simplot.add_realtime_traces_plot(
+                ('stim', r'$I_{\rm app}$', lambda: State.I_app),
+                units = 'pA',
+                datalim = 50.0,
+                fmt = dict(lw=1),
+                legend = 'last',
+        )
+
+        # Initialize example units trace plots of voltage, rate, and I_net
+        ex_units = randint(group.N, size=N_ex_cells)
+        ex_fmt = dict(lw=0.5, alpha=0.6)
+        volt_fn = lambda i: group.v[i]
+        voltage_traces = [
+                ('voltage', f'Vm_{i}', partial(volt_fn, i)) for i in ex_units
+        ]
+        simplot.add_realtime_traces_plot(*voltage_traces, fmt=ex_fmt)
+        rate_fn = lambda i: group.rates()[i]
+        rate_traces = [
+                ('rate', f'rate_{i}', partial(rate_fn, i)) for i in ex_units
+        ]
+        simplot.add_realtime_traces_plot(*rate_traces, fmt=ex_fmt)
+        net_fn = lambda i: group.I_net[i]
+        net_traces = [
+                ('net', f'I_net_{i}', partial(net_fn, i)) for i in ex_units
+        ]
+        simplot.add_realtime_traces_plot(*net_traces, fmt=ex_fmt)
+
+        # Register figure initializer to add artists to the figure
+        def init_figure():
+            simplot.draw_borders()
+            return simplot.get_all_artists()
+        simplot.init(init_figure)
 
     @step
     def plot_firing(self):
@@ -103,7 +171,7 @@ class NeuronEvaluation(SharpwavesContext):
         ax.set_ylabel('Membrane voltage, mV')
 
         # Plot a spike raster
-        ax.plot(spikes.t, self.p.groupspec.E_L * (
+        ax.plot(spikes.t, -85 * (
                 1 - spikes.unit/spikes.unit.max()), 'k.', ms=2, alpha=0.5,
                 label='spikes')
         ax.legend(loc='upper left')
