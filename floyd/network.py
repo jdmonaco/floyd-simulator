@@ -210,7 +210,7 @@ class Network(FloydObject):
         """
         self.neuron_groups.append(group)
         self.G.add_node(group)
-        self.debug('added neuron group: {group!s}')
+        self.debug(f'added neuron group: {group!s}')
 
     def add_synapses(self, synapses):
         """

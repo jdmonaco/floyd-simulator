@@ -39,9 +39,8 @@ def paramspec(name, parent=None, instance=False, **defaults):
     """
     class TempSpec(Spec): pass
     TempSpec.__name__ = name
-    parent = TempSpec(spec=parent, **defaults)
     def getspec(spec=None, **keyvalues):
-        newspec = parent.copy()
+        newspec = TempSpec(spec=parent, **defaults)
         newspec.update(spec=spec, **keyvalues)
         return newspec
     if instance:
