@@ -1,5 +1,5 @@
 """
-Create and handle caching storage for hexagonal cell layouts.
+Create spatial layouts for neuron groups including hexagonal grids.
 """
 
 import queue
@@ -12,18 +12,72 @@ from toolbox.constants import twopi
 from tenko.persistence import AutomaticCache
 
 from .spec import paramspec
+from .state import State
 
 
-HexLayoutSpec = paramspec('HexLayoutSpec',
-            scale=0.2,
-            radius=1.0,
-            origin=(0,0),
-            extent=(-1,1,-1,1),
-            orientation=0.0,
-)
+def get_layout_from_spec(spec):
+    """
+    Return a layout object based on the given layout spec.
+    """
+    name = spec.__class__.__name__
+    assert name.endswith('Spec'), f'bad layout spec name ({name!r})'
+    cls = eval(name[:-4])
+    layout = cls(spec)
+    if isinstance(layout, AutomaticCache):
+        if 'context' in State and State.context is not None:
+            layout.compute(context=State.context)
+    return layout
+
+
+class FixedLayout(object):
+
+    """
+    Non-spatial layout that fixes every unit to the same coordinates.
+    """
+
+    @classmethod
+    def get_spec(cls, return_factory=False, **keyvalues):
+        """
+        Return a Spec default factory function or instance with updated values.
+        """
+        if not hasattr(cls, '_Spec'):
+            cls._Spec = paramspec(f'{cls.__name__}Spec',
+                N = 100,
+                x = 0.0,
+                y = 0.0,
+            )
+        if return_factory:
+            return cls._Spec
+        return cls._Spec(**keyvalues)
+
+    def __init__(self, spec):
+        self.N = spec.N
+        self.x = zeros(spec.N) + spec.x
+        self.y = zeros(spec.N) + spec.y
 
 
 class HexagonalDiscLayout(AutomaticCache):
+
+    """
+    Spatial layout of a hexagonal grid circumscribed by a circle.
+    """
+
+    @classmethod
+    def get_spec(cls, return_factory=False, **keyvalues):
+        """
+        Return a Spec default factory function or instance with updated values.
+        """
+        if not hasattr(cls, '_Spec'):
+            cls._Spec = paramspec(f'{cls.__name__}Spec',
+                scale       = 0.2,
+                radius      = 1.0,
+                origin      = (0,0),
+                extent      = (-1,1,-1,1),
+                orientation = 0.0,
+            )
+        if return_factory:
+            return cls._Spec
+        return cls._Spec(**keyvalues)
 
     data_root = 'layout'
     key_params = ('scale', 'radius', 'origin', 'extent', 'orientation')

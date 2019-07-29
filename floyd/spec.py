@@ -59,6 +59,7 @@ def is_spec(s):
 
 
 _param_attrs = ['value', 'start', 'end', 'step', 'note']
+
 Param = namedtuple('Param', _param_attrs)
 
 
@@ -90,17 +91,17 @@ class Spec(object):
 
         def set_item(key, value, source):
             if is_param(value):
-                setattr(self, key, value.value)
-                self.defaults[key] = value.value
                 self.params[key] = value
+                self.defaults[key] = value.value
+                setattr(self, key, value.value)
                 self._debug(f'add Param key {key!r} from {source}')
                 return
             if callable(value) and value.__name__ == 'getspec':
                 value = value()
                 self._debug(f'instantiated spec {value!r} from {source}')
             setattr(self, key, value)
-            self._debug(f'set key {key!r} to {value!r} from {source}')
             self.defaults[key] = value
+            self._debug(f'set key {key!r} to {value!r} from {source}')
 
         if spec is not None:
             if callable(spec):
@@ -144,16 +145,28 @@ class Spec(object):
             self._out(f'Unknown key: {key!r}', warning=True)
             return
         if is_param(value):
-            setattr(self, key, value.value)
+            if key in self.params and self.params[key] == value:
+                return
             self.params[key] = value
+            setattr(self, key, value.value)
             self._debug(f'set key {key!r} to Param value {value!r}')
             return
         if callable(value) and getattr(value, '__name__', '_') == 'getspec':
             value = value()
+        curvalue = getattr(self, key)
+        if curvalue != value:
+            setattr(self, key, value)
+            self._debug(f'set key {key!r} to value {value!r}')
         if key in self.params:
-            self.params[key] = Param(*((value,) + self.params[key][1:]))
-        setattr(self, key, value)
-        self._debug(f'set key {key!r} to value {value!r}')
+            if self.params[key].value != value:
+                self.params[key] = Param(*((value,) + self.params[key][1:]))
+                self._debug(f'updated param {key!r} value to {value!r}')
+            if key in self.sliders:
+                slider = self.sliders[key]
+                if slider.value != value:
+                    slider.value = value
+                    slider.param.trigger('value')
+                    self._debug(f'updated slider {key!r} value to {value!r}')
 
     def __iter__(self):
         return self.items()
