@@ -10,6 +10,7 @@ except ImportError:
 import os
 import time
 
+from matplotlib.animation import FuncAnimation
 from panel.widgets import Toggle
 from panel.pane import Matplotlib, Markdown
 import panel as pn
@@ -194,7 +195,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         """
         # Run the simulation in the non-interactive animation mode
         params.update(interact=False)
-        self.model_setup(pfile=pfile, **params)
+        self.setup_model(pfile=pfile, **params)
 
         anim = FuncAnimation(
                 fig       = State.simplot.fig,
@@ -209,7 +210,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         # Save the animation as a movie file
         self['movie_file'] = self.filename(tag=tag, ext='mp4')
         anim.save(self.path(self.c.movie_file), fps=fps, dpi=dpi)
-        self.closefig()
+        State.simplot.closefig()
         self.hline()
 
         # Save simulation data traces and play the movie!

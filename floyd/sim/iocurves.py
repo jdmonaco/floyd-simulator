@@ -44,6 +44,9 @@ class InputOutputCurves(FloydContext):
             neurontype  = 'int',  # 'int', 'pyr'
             CA_spacing  = 0.031,  # mm, 0.1 cf. Taxidis
             CA_radius   = 0.220,  # mm, CA3/1 disc radius
+            sigma       = 0.0,
+            g_tonic_exc = 0.0,
+            g_tonic_inh = 0.0,
         )
 
         # Create the hexagonal disc layout spec for the group
@@ -56,7 +59,12 @@ class InputOutputCurves(FloydContext):
         )
 
         # Create the neuron group based on model and neuron types
-        params = dict(layout=layout)
+        params = dict(
+                sigma       = sigma,
+                g_tonic_exc = g_tonic_exc,
+                g_tonic_inh = g_tonic_inh,
+                layout      = layout
+        )
         key = (modeltype, neurontype)
         if key == ('LIF', 'int'):
             group = create_LIF_interneurons(**params)
@@ -74,7 +82,6 @@ class InputOutputCurves(FloydContext):
                 v = group.p.E_L,
                 excitability = PositiveGaussianSampler(1.0, 0.1),
         )
-        self.debug(group.excitability)
 
         # Create the step-pulse DC-current stimulator
         pulses = step_pulse_series(N_pulses, duration, max_current)
@@ -140,6 +147,7 @@ class InputOutputCurves(FloydContext):
 
         # Register figure initializer to add artists to the figure
         def init_figure():
+            self.debug('init_figure called')
             simplot.draw_borders()
             return simplot.get_all_artists()
         simplot.init(init_figure)

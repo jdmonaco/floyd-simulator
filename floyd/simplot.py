@@ -9,10 +9,11 @@ from matplotlib.gridspec import GridSpec
 from roto.dicts import merge_two_dicts
 
 from .traces import RealtimeTracesPlot
+from .base import FloydObject
 from .state import State
 
 
-class SimulationPlotter(object):
+class SimulationPlotter(FloydObject):
 
     """
     Manage axes, plots, data traces, and labels for interactive visualization.
@@ -23,6 +24,7 @@ class SimulationPlotter(object):
         After construction, use `gs` to create subplot specs to pass to the
         `set_axes()` method.
         """
+        FloydObject.__init__(self)
         self.nrows = nrows
         self.ncols = ncols
         self.figsize = (State.figw, State.figh)
@@ -89,8 +91,7 @@ class SimulationPlotter(object):
         Note: `updater` a callback that should update the plot data.
         """
         self.plots.append((handle, updater))
-        State.context.out('Artist: {}', handle, updater,
-                prefix='SimPlotRegistration')
+        self.out('Artist: {}, {}', handle, updater, prefix='SimPlotRegistrar')
 
     def add_realtime_traces_plot(self, *traceplot, **tracekw):
         """
@@ -100,7 +101,7 @@ class SimulationPlotter(object):
         constructor. Callback updaters should be used for all traces.
         """
         rtp = RealtimeTracesPlot(*traceplot, **tracekw)
-        State.context.out('Trace: {}', rtp, prefix='SimPlotRegistration')
+        self.out(f'Trace: {rtp!r}', prefix='SimPlotRegistrar')
         self.traceplots.append(rtp)
 
     def draw_borders(self, color='k', linewidth=1, bottom=None, right=None):
@@ -139,7 +140,13 @@ class SimulationPlotter(object):
         if State.interact:
             self.init_timestamp()
             initializer()
-            plt.close(self.fig)
+            self.closefig()
+
+    def closefig(self):
+        """
+        Close the figure.
+        """
+        plt.close(self.fig)
 
     def get_all_artists(self):
         """
@@ -159,10 +166,10 @@ class SimulationPlotter(object):
             elif isinstance(plot, mpl.artist.Artist):
                 self.artists.append(plot)
             else:
-                State.context.out(plot, prefix='UnknownPlotType', warning=True)
+                self.out(plot, prefix='UnknownPlotType', warning=True)
 
         for rtp in self.traceplots:
-            self.artists.extend(rpt.plot())
+            self.artists.extend(rtp.plot())
 
         return self.artists
 
