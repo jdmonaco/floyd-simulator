@@ -58,7 +58,8 @@ class ModelRecorder(FloydObject):
         State.n = -1  # simulation frame index, flag for unstarted simulation
         State.t = -State.dt
         self.Nprogress = 0
-        self.show_progress = show_progress and not State.debug
+        self.show_progress = show_progress and not (
+                             State.debug or State.interact)
 
         # Recording time tracking
         self.ts_rec = np.arange(0, State.duration + State.dt_rec, State.dt_rec)
@@ -193,19 +194,21 @@ class ModelRecorder(FloydObject):
         Update the time series, variable monitors, and state monitors.
         """
         State.n += 1
-        if not self:
-            self.out(f'Simulation complete (n = {State.n})', anybar='green')
-            return
         if State.interact:
             State.t += State.dt
+            return
+        if not self:
+            State.n -= 1  # the extra frame is not performed
+            self.out(f'Simulation complete (n = {State.n})', anybar='green')
             return
         if State.n == 0:
             State.context.hline()
 
+        # Update simulation time and progress bar output
         State.t = State.ts[State.n]
         self.progressbar()
 
-        # Record spike/event timing for every simulation timestep
+        # Record spike/event timing at every simulation timestep
         for name, data in self.events.items():
             recdata = data[self.unit_slices[name]]
             units = self.unit_indexes[name][recdata]
@@ -215,7 +218,17 @@ class ModelRecorder(FloydObject):
             self.units[name] = np.concatenate((self.units[name], units))
             self.timing[name] = np.concatenate((self.timing[name], timing))
 
-        # Trigger state and variable recording by decrease in t % t_rec
+        # Variable and state data traces are sampled with the recording clock.
+        # Each sample is triggered by a modulo calculation of the simulation
+        # time with the parameterized recording interval. This calculation is
+        # bypassed by the conditional below if the sample interval `dt_rec` is
+        # equal to the simulation interval `dt`. (It can't be any lower, as an
+        # exception would be raised in the constructor.)
+        #
+        # The modulo calculation is that a sample is triggered when t % dt_rec
+        # is observed to *decrease* (meaning that the simulation wrapped around
+        # one full cycle of the sampling interval).
+        #
         if State.dt_rec > State.dt:
             _rec_mod = State.t % State.dt_rec
             between_samples = _rec_mod >= self._rec_mod
@@ -225,7 +238,7 @@ class ModelRecorder(FloydObject):
 
         # Update recording index and time
         if self.n_rec >= self.N_t_rec:
-            self.out('Recording complete (t = {:.3f})', self.ts_rec[-1])
+            self.out('Recording complete (t = {:.3f} ms)', self.ts_rec[-1])
             return
         self.n_rec += 1
         self.t_rec = self.ts_rec[self.n_rec]
@@ -244,8 +257,8 @@ class ModelRecorder(FloydObject):
         """
         Once-per-update console output for a simulation progress bar.
         """
-        if State.interact: return
-        if not self.show_progress: return
+        if not self.show_progress:
+            return
         State.progress = pct = (State.n + 1) / State.N_t
         barpct = self.Nprogress / Config.progress_width
         while barpct < pct:
@@ -257,14 +270,14 @@ class ModelRecorder(FloydObject):
         """
         Save monitored state, variable, and spike/event recordings.
         """
+        if State.interact:
+            self.out('No recordings in interactive mode', warning=True)
+            return
+
         for name in self.events.keys():
             df = pd.DataFrame(data=np.c_[self.units[name], self.timing[name]],
                     columns=('unit', 't'))
             State.context.save_dataframe(df, *path, name, **root)
-
-        if State.interact:
-            self.out('No recordings in interactive mode', warning=True)
-            return
 
         State.context.save_array(self.ts_rec, *path, 't', **root)
 

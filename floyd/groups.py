@@ -6,12 +6,12 @@ from functools import reduce
 import operator as op
 
 from toolbox.numpy import *
-from pouty import log
 
+from .base import FloydObject
 from .spec import is_spec
 
 
-class BaseUnitGroup(object):
+class BaseUnitGroup(FloydObject):
 
     base_variables = ()
     extra_variables = ()
@@ -39,6 +39,7 @@ class BaseUnitGroup(object):
         dtype : '?' | 'u' | 'i' | 'f' | 'd', optional (default 'f')
             Default numpy dtype to use for initializing array variables
         """
+        FloydObject.__init__(self, name=name)
         self.name = name
         self.shape = N_or_shape
         if np.iterable(self.shape):
@@ -83,8 +84,8 @@ class BaseUnitGroup(object):
             getattr(self, name)[:] = self._evaluate(value)
             return
         if name == 'p' and not is_spec(value):
-            log(f'Prohibiting attempt to set \'p\' with non-spec: {value!r}',
-                    prefix=f'{self.name}UnitGroup', warning=True)
+            self.out(f'Prohibiting setting \'p\' with non-spec: {value!r}',
+                     warning=True)
             return
         object.__setattr__(self, name, value)
 

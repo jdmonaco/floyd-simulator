@@ -76,7 +76,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
         self.g_total = zeros(post.N, 'f')
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
-        State.context.out('{} = {:.4g} mV', self.name,
+        self.out('{} = {:.4g} mV', self.name,
                 postsynaptic_potential(self.p, self.g_peak.mean(), post.p.C_m,
                     self.E_syn, post.p.E_L),
                 prefix='PostSynPotential')
@@ -102,7 +102,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
         stats += ['contacts/connection = {}'.format(
                   msd(self.S.sum(axis=1)[nz]/self.fanin[nz]))]
 
-        State.context.out('\n'.join(stats), prefix=self.name)
+        self.out('\n'.join(stats))
 
     def set_delays(self, cond_velocity=None):
         """
@@ -115,7 +115,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
         timing = self.distances / cond_velocity
         self.delay = DelayLines.from_delay_times(self.N, timing[self.ij],
                 State.dt, dtype='?')
-        State.context.out('{}: max delay = {} timesteps', self.name,
+        self.out('{}: max delay = {} timesteps', self.name,
                 self.delay.delays.max(), prefix='DelayLines')
 
     def update(self):
@@ -163,7 +163,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
         """
         if hasattr(self, 'active_post'):
             raise RuntimeError('already connected!')
-        State.context.out('Connecting {}', self.name, prefix='Synapses')
+        self.out('Connecting {}', self.name)
 
         self.set(C=0, S=0)
         C = self.S  # accumulate no. of contacts if multapses allowed

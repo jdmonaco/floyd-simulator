@@ -179,11 +179,11 @@ class Network(FloydObject):
         Main once-per-loop update: the recorder, neuron groups, and synapses.
         """
         State.recorder.update()
-        for stimulator in self.stimulators:
-            stimulator.update()
         if not State.recorder:
             return
 
+        for stimulator in self.stimulators:
+            stimulator.update()
         for group in self.neuron_groups:
             group.update()
         for synapses in self.synapses:
@@ -233,10 +233,10 @@ class Network(FloydObject):
         """
         Print out detailed fanin/fanout statistics for each projection.
         """
-        self._out.hline()
+        self.out.hline()
         for S in self.synapses:
             S.connectivity_stats()
-            self._out.hline()
+            self.out.hline()
 
     def group_items(self):
         """

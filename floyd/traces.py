@@ -8,10 +8,11 @@ from collections import deque
 import numpy as np
 from numpy import cumsum, inf
 
+from .base import FloydObject
 from .state import State
 
 
-class RealtimeTracesPlot(object):
+class RealtimeTracesPlot(FloydObject):
 
     """
     A collection of real-time windowed trace plots with adaptive axes limits.
@@ -60,6 +61,7 @@ class RealtimeTracesPlot(object):
         legend_format : dict, optional
             Legend formatting arguments can be provided
         """
+        FloydObject.__init__(self)
         self.ax = {}
         self.axtraces = []
         self.fmt = {}
@@ -81,7 +83,7 @@ class RealtimeTracesPlot(object):
                 ax, name, updater, _fmt = values
                 trace_fmt.update(_fmt)
             else:
-                State.context.out(values, prefix='InvalidTrace', error=True)
+                self.out(f'Invalid trace: {values!r}', error=True)
                 continue
 
             # Check if a named axes is in the shared simulation plotter
@@ -186,8 +188,7 @@ class RealtimeTracesPlot(object):
             elif name in traces:
                 value = traces[name]
             else:
-                State.context.out(name, prefix='MissingDataTrace',
-                        warning=True)
+                self.out(f'Missing trace update: {name!r}', warning=True)
                 continue
 
             # Add value to rolling window trace or simple data trace
