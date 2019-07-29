@@ -133,7 +133,8 @@ class InputOutputCurves(FloydContext):
         voltage_traces = [
                 ('voltage', f'Vm_{i}', partial(volt_fn, i)) for i in ex_units
         ]
-        simplot.add_realtime_traces_plot(*voltage_traces, fmt=ex_fmt)
+        simplot.add_realtime_traces_plot(*voltage_traces, fmt=ex_fmt,
+                datalim='none')
         rate_fn = lambda i: group.rates()[i]
         rate_traces = [
                 ('rate', f'rate_{i}', partial(rate_fn, i)) for i in ex_units

@@ -19,6 +19,7 @@ from tenko.context import AbstractBaseContext, step
 from tenko.mixins import RandomMixin
 from roto.dicts import merge_two_dicts
 from maps.geometry import EnvironmentGeometry
+from pouty.console import purple as hilite
 from pouty import debug_mode
 
 from .spec import paramspec
@@ -60,6 +61,11 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         """
         Set simulation parameters in global scope and shared state.
         """
+        # Start off with the correct (or default) debug mode
+        _debug = simparams.get('debug', Config.debug)
+        if modparams is not None:
+            debug_mode(modparams.get('debug', _debug))
+
         # Set the configured defaults to a paramspec attribute
         self.psim = paramspec('SimSpec', instance=True,
                 title     = Config.title,
@@ -86,16 +92,16 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         self.out(f'Simulation parameters:')
         self.psim.update(**simparams)
         for name, value in self.psim:
+            logmsg = f'- {name} = {value!r}'.format(name, value)
             if modparams is not None and name in modparams:
-                self.psim[name] = modparams.pop(name)
-                logmsg = f'* {name} = {self.psim[name]!r} [default: {value!r}]'
-            else:
-                logmsg = f'- {name} = {value!r}'.format(name, value)
+                modvalue = modparams.pop(name)
+                if modvalue != self.psim[name]:
+                    logmsg = hilite(
+                        f'* {name} = {self.psim[name]!r} [default: {value!r}]')
+                    self.psim[name] = modvalue
             self.out(logmsg, hideprefix=True)
 
         # Update global scope and shared state, then write out a JSON file
-        debug_mode(self.psim.debug)
-        self.get_global_scope().update(self.psim)
         reset_state()
         State.update(self.psim)
         State.context = self
@@ -136,7 +142,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         for name, value in self.p:
             dflt = self.p.defaults[name]
             if value != dflt:
-                logstr = f'* {name} = {value!r} [default: {dflt!r}]'
+                logstr = hilite(f'* {name} = {value!r} [default: {dflt!r}]')
             else:
                 logstr = f'- {name} = {value!r}'
             self.out(logstr, hideprefix=True)

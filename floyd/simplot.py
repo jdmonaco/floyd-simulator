@@ -91,7 +91,7 @@ class SimulationPlotter(FloydObject):
         Note: `updater` a callback that should update the plot data.
         """
         self.plots.append((handle, updater))
-        self.out('Artist: {}, {}', handle, updater, prefix='SimPlotRegistrar')
+        self.out('Artist: {}', handle, prefix='SimPlotRegistrar')
 
     def add_realtime_traces_plot(self, *traceplot, **tracekw):
         """

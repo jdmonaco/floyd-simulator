@@ -180,6 +180,7 @@ class RealtimeTracesPlot(FloydObject):
         does not have an associated updater callback.
         """
         self.q_t.append(State.t)
+        N_q_t = len(self.q_t)
         for name in self.names:
 
             # Retrieve value from callback or keyword arguments
@@ -191,14 +192,20 @@ class RealtimeTracesPlot(FloydObject):
                 self.out(f'Missing trace update: {name!r}', warning=True)
                 continue
 
+            # Skip adding value if queue somehow advanced already
+            # (This happens irregularly when creating movies for some reason.)
+            q_name = self.q[name]
+            if len(q_name) >= N_q_t:
+                continue
+
             # Add value to rolling window trace or simple data trace
             if name in self.rolls:
                 roll = self.q_rolls[name]
                 roll.append(float(value))
                 q_sum = cumsum(roll)
-                self.q[name].append((q_sum[-1] - q_sum[0])/len(roll))
+                q_name.append((q_sum[-1] - q_sum[0])/len(roll))
             else:
-                self.q[name].append(float(value))
+                q_name.append(float(value))
 
     def update_plots(self):
         """
