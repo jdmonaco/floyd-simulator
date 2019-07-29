@@ -250,8 +250,9 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         State.block = 0
         dt_perf = int(1e3)
         tictoc = Markdown('Block -- [-- ms]')
-        player = pn.widgets.DiscretePlayer(value='1', options=['1', '2', '3'],
-                interval=dt_perf, name='Simulation Control', loop_policy='loop')
+        player = pn.widgets.DiscretePlayer(value='1', options=list(map(str,
+            range(1, max(4, 1+int(self.psim.tracewin/self.psim.calcwin))))),
+            interval=dt_perf, name='Simulation Control', loop_policy='loop')
 
         # Markdown displays for each registered table output
         table_txt = {}
@@ -260,15 +261,14 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
 
         def simulation(*events):
             nonlocal dt_perf
+            t0 = time.perf_counter()
 
             # Disable the player to stop interval during block simulation
             player.interval = int(1e6)  # ms plus some padding
             player.param.trigger('interval')
 
-            # Run a blocked update of the network with performance timing
-            t0 = time.perf_counter()
+            # Run a blocked update of the network
             State.network.dashboard_update()
-            dt_perf = int(1e3*(time.perf_counter() - t0))
 
             # Update the tic-toc string and block count
             tictoc_str = f'Block {State.block} [{dt_perf} ms]'
@@ -280,8 +280,11 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
             for label in table_txt.keys():
                 table_txt[label].object = State.tablemaker.get(label)
 
-            # Manually trigger main figure and play-toggle button to advance
+            # Manually update main figure
             main_figure.param.trigger('object')
+
+            # Calculate the performance timing to update the player interval
+            dt_perf = int(1e3*(time.perf_counter() - t0))
             player.interval = dt_perf
             player.param.trigger('interval')
 
@@ -314,4 +317,5 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         if return_panel:
             return panel
 
-        panel.show(threaded=threaded)  # blocking call if threaded == True
+        # Blocking call if threaded == True
+        self.server = panel.show(threaded=threaded)
