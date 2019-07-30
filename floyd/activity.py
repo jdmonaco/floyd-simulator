@@ -46,6 +46,15 @@ class FiringRateWindow(object):
         """
         return self.R.mean()
 
+    def get_active_mean_rate(self):
+        """
+        Return the average firing rate for cells active in the current window.
+        """
+        active = any_(self.spikes, axis=1)
+        if any_(active):
+            return self.R[active].mean()
+        return 0.0
+
     def get_activity(self):
         """
         Return the fraction of units active in the current window.

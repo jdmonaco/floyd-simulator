@@ -24,6 +24,7 @@ from .input    import step_pulse_series, triangle_wave
 from .delay    import DelayLines
 from .noise    import OrnsteinUhlenbeckProcess
 from .simplot  import SimulationPlotter
+from .graph    import NetworkGraph
 from .traces   import RealtimeTracesPlot
 from .mdtables import MarkdownTable, TableMaker
 from .layout   import FixedLayout, HexagonalDiscLayout

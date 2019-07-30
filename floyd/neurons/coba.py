@@ -2,6 +2,8 @@
 Base class for conductance-based model neuron groups.
 """
 
+from functools import partial
+
 from toolbox.numpy import *
 
 from ..layout import get_layout_from_spec
@@ -196,3 +198,28 @@ class COBANeuronGroup(BaseUnitGroup):
         Return the active fraction in the calculation window.
         """
         return self.activity.get_activity()
+
+    def set_pulse_metrics(self, active=(10, 90, 10), rate=(1, 70, 10),
+        only_active=True):
+        """
+        Set (min, max, smoothness) for active fraction and mean rate.
+        """
+        pulse = lambda l, u, k, x: \
+            (1 + 1/(1 + exp(-k * (x - u))) - 1/(1 + exp(k * (x - l)))) / 2
+
+        self.active_pulse = partial(pulse, *active)
+        self.rate_pulse = partial(pulse, *rate)
+        self.pulse_only_active = only_active
+
+    def pulse(self):
+        """
+        Return a [0,1] "pulse" metric of the healthiness of activity.
+        """
+        apulse = self.active_pulse(self.activity.get_activity())
+        if self.pulse_only_active:
+            rpulse = self.rate_pulse(self.activity.get_active_mean_rate())
+        else:
+            rpulse = self.rate_pulse(self.activity.get_mean_rate())
+        if abs(apulse) > abs(rpulse):
+            return apulse
+        return rpulse

@@ -22,8 +22,11 @@ class Network(FloydObject):
         FloydObject.__init__(self)
 
         self.neuron_groups = []
+        self._neuron_dict = {}
         self.synapses = []
+        self._synapses_dict = {}
         self.stimulators = []
+        self._stimulators_dict = {}
         self.buttons = {}
         self.watchers = {}
         self.G = nx.DiGraph()
@@ -41,7 +44,7 @@ class Network(FloydObject):
         paramfile_input = TextInput(name='Filename', value='model-params')
         notes_input = TextInput(name='Notes',
                 placeholder='Describe the results...')
-        notes_txt = Markdown('', height=200)
+        notes_txt = Markdown('', height=50)
         filename_txt = Markdown('')
         uniquify_box = Checkbox(name='Force unique', value=False)
         save_btn = Button(name='Save', button_type='primary')
@@ -171,7 +174,7 @@ class Network(FloydObject):
         """
         self.model_update()
         State.simplot.update_traces_data()
-        self.display_update()
+        self.display_update(animation=True)
         return State.simplot.artists
 
     def model_update(self):
@@ -189,11 +192,11 @@ class Network(FloydObject):
         for synapses in self.synapses:
             synapses.update()
 
-    def display_update(self):
+    def display_update(self, animation=False):
         """
         Update main simulation figure (and tables in interactive mode).
         """
-        State.simplot.update_plots()
+        State.simplot.update_plots(animation=animation)
         if State.interact:
             State.tablemaker.update()
 
@@ -208,26 +211,38 @@ class Network(FloydObject):
         """
         Add an instance of NeuronGroup to the network.
         """
+        if group in self.neuron_groups:
+            self.out(group.name, prefix='AlreadyInNetwork', warning=True)
+            return
         self.neuron_groups.append(group)
-        self.G.add_node(group)
+        self._neuron_dict[group.name] = group
+        self.G.add_node(group.name, object=group)
         self.debug(f'added neuron group: {group!s}')
 
     def add_synapses(self, synapses):
         """
         Add an instance of Synapses to the network.
         """
+        if synapses in self.synapses:
+            self.out(synapses.name, prefix='AlreadyInNetwork', warning=True)
+            return
         self.synapses.append(synapses)
+        self._synapses_dict[synapses.name] = synapses
         synapses.post.add_synapses(synapses)
-        self.G.add_edge(synapses.pre, synapses.post, synapses=synapses)
+        self.G.add_edge(synapses.pre.name, synapses.post.name, object=synapses)
         self.debug('added synapses: {synapses!s}')
 
-    def add_stimulator(self, stimulator):
+    def add_stimulator(self, stim):
         """
         Add an instance of InputStimulator to the network.
         """
-        self.stimulators.append(stimulator)
-        self.G.add_edge(stimulator, stimulator.target)
-        self.debug(f'added stimulator: {stimulator!s}')
+        if stim in self.stimulators:
+            self.out(stimulators.name, prefix='AlreadyInNetwork', warning=True)
+            return
+        self.stimulators.append(stim)
+        self._stimulators_dict[stim.name] = stim
+        self.G.add_edge(stim.name, stim.target.name, object=stim)
+        self.debug(f'added stimulator: {stim!s}')
 
     def display_neural_connectivity(self):
         """
@@ -238,51 +253,74 @@ class Network(FloydObject):
             S.connectivity_stats()
             self.out.hline()
 
+    def get_neuron_group(self, key):
+        """
+        Return the named neuron group object.
+        """
+        return self._neuron_dict[key]
+
     def group_items(self):
         """
         Generator over neuron groups that provides (name, object) tuples.
         """
-        for group in self.neuron_groups:
-            yield group.name, group
+        return self._neuron_dict.items()
 
     def group_names(self):
         """
         Generator over neuron groups that provides group names.
         """
-        for group in self.neuron_groups:
-            yield group.name
+        return self._neuron_dict.keys()
 
     def group_values(self):
         """
         Generator over neuron groups that provides group objects.
         """
-        for group in self.neuron_groups:
-            yield group
+        return self._neuron_dict.values()
+
+    def get_synapses(self, key):
+        """
+        Return the named neuron group object.
+        """
+        return self._synapses_dict[key]
 
     def synapse_items(self):
         """
         Generator over synapses that provides (name, object) tuples.
         """
-        for synapse in self.synapses:
-            yield synapse.name, synapse
+        return self._synapses_dict.items()
 
     def synapse_names(self):
         """
         Generator over synapses that provides synapse names.
         """
-        for synapse in self.synapses:
-            yield synapse.name
+        return self._synapses_dict.keys()
 
     def synapse_values(self):
         """
         Generator over synapses that provides synapse objects.
         """
-        for synapse in self.synapses:
-            yield synapse
+        return self._synapses_dict.values()
 
-    def draw(self, ax=None):
+    def get_stimulator(self, key):
         """
-        Plot the graph.
+        Return the named neuron group object.
         """
-        pos = nx.nx_agraph.graphviz_layout(self.G)
-        nx.draw(self.G, pos=pos, ax=ax)
+        return self._stimulators_dict[key]
+
+    def stimulator_items(self):
+        """
+        Generator over stimulators that provides (name, object) tuples.
+        """
+        return self._stimulators_dict.items()
+
+    def stimulator_names(self):
+        """
+        Generator over stimulators that provides stimulator names.
+        """
+        return self._stimulators_dict.keys()
+
+    def stimulator_values(self):
+        """
+        Generator over stimulators that provides stimulator objects.
+        """
+        return self._stimulators_dict.values()

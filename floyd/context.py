@@ -255,6 +255,12 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         # Main figure Matplotlib pane object will be manually updated
         main_figure = Matplotlib(object=State.simplot.fig, dpi=dpi)
 
+        # Create another figure for the network graph if it exists
+        graph_figure = None
+        if 'netgraph' in State and State.netgraph is not None:
+            if not State.simplot.network_graph_in_fig:
+                graph_figure = Matplotlib(object=State.netgraph.fig, dpi=dpi)
+
         # Set up discrete player widget for play/pause control
         State.block = 0
         dt_perf = int(1e3)
@@ -289,8 +295,10 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
             for label in table_txt.keys():
                 table_txt[label].object = State.tablemaker.get(label)
 
-            # Manually update main figure
+            # Manually update main figure and graph figure if it exists
             main_figure.param.trigger('object')
+            if graph_figure is not None:
+                graph_figure.param.trigger('object')
 
             # Calculate the performance timing to update the player interval
             dt_perf = int(1e3*(time.perf_counter() - t0))
@@ -309,6 +317,10 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
 
         controls = State.network.get_panel_controls(single_column=True)
 
+        last_column = (controls,)
+        if graph_figure is not None:
+            last_column = last_column + (graph_figure,)
+
         panel = pn.Row(
                     pn.WidgetBox(
                         f'## {self.psim.title}',
@@ -320,7 +332,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                         gain_row,
                         neuron_row,
                     ),
-                    controls,
+                    pn.Column(*last_column),
                 )
 
         if return_panel:

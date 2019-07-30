@@ -7,10 +7,8 @@ from functools import partial
 from toolbox.numpy import *
 from roto.plots import shaded_error
 
-from ..neurons.gallery import *
-from ..layout import HexagonalDiscLayout as HexLayout
-
 from . import FloydContext, step
+from ..neurons.gallery import *
 from .. import *
 
 
@@ -50,7 +48,7 @@ class InputOutputCurves(FloydContext):
         )
 
         # Create the hexagonal disc layout spec for the group
-        layout = HexLayout.get_spec(
+        layout = HexagonalDiscLayout.get_spec(
             scale       = CA_spacing,
             radius      = CA_radius,
             origin      = (CA_radius,)*2,
@@ -80,6 +78,7 @@ class InputOutputCurves(FloydContext):
             raise ValueError(f'unknown neuron model: {key!r}')
 
         # Initialize voltage and hetergeneous excitability
+        group.set_pulse_metrics()
         group.set(
                 v = group.p.E_L,
                 excitability = PositiveGaussianSampler(1.0, 0.1),
@@ -87,7 +86,7 @@ class InputOutputCurves(FloydContext):
 
         # Create the step-pulse DC-current stimulator
         pulses = step_pulse_series(N_pulses, duration, max_current)
-        stim = InputStimulator(group.p, 'I_DC_mean', *pulses,
+        stim = InputStimulator(group, 'I_DC_mean', *pulses,
                                state_key='I_app', repeat=True)
         if self.current_step() == 'collect_data':
             self.save_array(pulses, 'stimulus_series')
@@ -137,21 +136,25 @@ class InputOutputCurves(FloydContext):
         ]
         simplot.add_realtime_traces_plot(*voltage_traces, fmt=ex_fmt,
                 datalim='none')
-        rate_fn = lambda i: group.rates()[i]
-        rate_traces = [
-                ('rate', f'rate_{i}', partial(rate_fn, i)) for i in ex_units
-        ]
-        simplot.add_realtime_traces_plot(*rate_traces, fmt=ex_fmt)
+        # rate_fn = lambda i: group.rates()[i]
+        # rate_traces = [
+                # ('rate', f'rate_{i}', partial(rate_fn, i)) for i in ex_units
+        # ]
+        # simplot.add_realtime_traces_plot(*rate_traces, fmt=ex_fmt)
         net_fn = lambda i: group.I_net[i]
         net_traces = [
                 ('net', f'I_net_{i}', partial(net_fn, i)) for i in ex_units
         ]
         simplot.add_realtime_traces_plot(*net_traces, fmt=ex_fmt)
 
+        # Creat the network graph visualization
+        netgraph = NetworkGraph()
+
         # Register figure initializer to add artists to the figure
         def init_figure():
             self.debug('init_figure called')
             simplot.draw_borders()
+            netgraph.plot(ax='rate')
             return simplot.get_all_artists()
         simplot.init(init_figure)
 

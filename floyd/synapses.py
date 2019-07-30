@@ -77,7 +77,7 @@ class Synapses(RandomMixin,BaseUnitGroup):
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
         self.out('{} = {:.4g} mV', self.name,
-                postsynaptic_potential(self.p, self.g_peak.mean(), post.p.C_m,
+                postsynaptic_potential(self.p, self.p.g_max, post.p.C_m,
                     self.E_syn, post.p.E_L),
                 prefix='PostSynPotential')
 

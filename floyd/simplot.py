@@ -37,6 +37,8 @@ class SimulationPlotter(FloydObject):
         self.artists = []
         self.traceplots = []
         self.initializer = None
+        self.network_graph = None
+        self.network_graph_in_fig = False
         plt.ioff()
 
         State.simplot = self
@@ -70,12 +72,14 @@ class SimulationPlotter(FloydObject):
             return self.axes[names[0]]
         return [self.axes[name] for name in names]
 
-    def update_plots(self):
+    def update_plots(self, animation=False):
         """
         Update the timestamp and all registered plots with new data.
         """
         [updater() for _, updater in self.plots]
         [rtp.update_plots() for rtp in self.traceplots]
+        if not animation or self.network_graph_in_fig:
+            self.network_graph.update()
         return self.fig
 
     def update_traces_data(self):
@@ -92,6 +96,15 @@ class SimulationPlotter(FloydObject):
         """
         self.plots.append((handle, updater))
         self.out('Artist: {}', handle, prefix='SimPlotRegistrar')
+
+    def register_network_graph(self, netgraph):
+        """
+        Set a NetworkGraph instance to be updated during the simulation.
+        """
+        self.network_graph = netgraph
+        self.network_graph_in_fig = netgraph.ax in self.axes_objects
+        self.out('Graph: {} (main figure = {})', netgraph,
+                self.network_graph_in_fig, prefix='SimPlotRegistrar')
 
     def add_realtime_traces_plot(self, *traceplot, **tracekw):
         """
@@ -147,6 +160,8 @@ class SimulationPlotter(FloydObject):
         Close the figure.
         """
         plt.close(self.fig)
+        if self.network_graph is not None:
+            self.network_graph.closefig()
 
     def get_all_artists(self):
         """
@@ -170,6 +185,10 @@ class SimulationPlotter(FloydObject):
 
         for rtp in self.traceplots:
             self.artists.extend(rtp.plot())
+
+        if self.network_graph is not None:
+            if self.network_graph.ax in self.axes_objects:
+                self.artists.extend(self.network_graph.artists)
 
         return self.artists
 

@@ -42,21 +42,32 @@ class InputStimulator(FloydObject):
     def __init__(self, target, variable, *timepoints, state_key=None,
         stimulate=None, repeat=False, repeat_until=None):
         """
-        Target object variable is manipulated according to Timepoint tuples.
+        Target object parameter is manipulated according to Timepoint tuples.
 
-        Note: val can be 'off' to disable updating until the next time point.
+        Note: Target should be a BaseUnitGroup subclass. The variable should be
+        the name of an array variable or a spec parameter in 'target.p'.
         """
-        FloydObject.__init__(self)
+        self.name = f'Stim:{target}.{variable}'
+        FloydObject.__init__(self, self.name)
         self.target = target
         self.variable = variable
         self.state_key = state_key
 
-        assert hasattr(target, variable), f'no target attribute ({variable!r})'
+        self.is_array = False
+        self.is_target_spec = False
+
+        if hasattr(target, variable):
+            assert isinstance(getattr(target, variable), ndarray), \
+                    'object-level attributes must be arrays'
+            self.is_array = True
+        elif hasattr(target, 'p') and variable in target.p:
+            self.is_target_spec = True
+        else:
+            raise ValueError('not an attribute array or spec parameter '
+                             f'{variable!r}')
 
         # Process `stimulate` as an index for array target variables
         self.index = None
-        self.is_array = isinstance(getattr(target, variable), ndarray)
-        self.is_target_spec = is_spec(target)
         if self.is_array:
             if stimulate is None:
                 self.index = slice(None)
@@ -130,7 +141,7 @@ class InputStimulator(FloydObject):
         if self.is_array:
             getattr(self.target, self.variable)[self.index] = value
         elif self.is_target_spec:
-            self.target[self.variable] = value
+            self.target.p[self.variable] = value
         else:
             setattr(self.target, self.variable, value)
         if self.state_key is not None:
