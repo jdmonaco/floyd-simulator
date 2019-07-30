@@ -34,7 +34,7 @@ class InputOutputCurves(FloydContext):
             tracewin = 100.0,  # ms, trace plot window
             calcwin  = 50.0,   # ms, rolling calculation window
             interact = False,  # run in interactive mode
-            debug    = True,   # run in debug mode
+            debug    = False,  # run in debug mode
         )
         self.set_model_parameters(params, pfile=pfile,
             N_pulses    = 33,     # number of test pulses
@@ -72,8 +72,10 @@ class InputOutputCurves(FloydContext):
             group = create_LIF_pyramids(**params)
         elif key == ('AdEx', 'int'):
             group = create_AdEx_interneurons(**params)
-        elif key == ('AdEx', 'pyr'):
-            group = create_AdEx_pyramids(**params)
+        elif key == ('Malerba_AdEx', 'pyr'):
+            group = create_Malerba_AdEx_pyramids(**params)
+        elif key == ('Brette_AdEx', 'pyr'):
+            group = create_Brette_AdEx_pyramids(**params)
         else:
             raise ValueError(f'unknown neuron model: {key!r}')
 
@@ -190,6 +192,7 @@ class InputOutputCurves(FloydContext):
         """
         Compute f-I curves based on simulation data.
         """
+        self.load_parameters(step='collect_data', tag=tag)
         root = dict(tag=tag, step='collect_data')
         t = self.read_array('t', **root)
         v = self.read_array('v', **root)
@@ -245,8 +248,9 @@ class InputOutputCurves(FloydContext):
 
         # Plot the raw, mean, and error f-I curves with results annotation
         self.out('Plotting f-I curves...')
-        fig = self.figure('iocurves', clear=True, figsize=(6,5),
-                title=r'Rate vs. $I_{\rm app}$'f' for {self.p.groupname}')
+        fig = self.figure('iocurves', clear=True, figsize=(6, 5),
+                title=r'Rate vs. $I_{\rm app}$ for '
+                      f'{self.p.modeltype}/{self.p.neurontype}')
         ax = fig.add_subplot()
         ax.plot(I_stim[:-1], fI, 'k-', lw=0.6, alpha=0.15, zorder=-10)
         ax.plot(I_stim[:-1], fI_mean, 'b-', lw=1.2, alpha=0.8, zorder=10,
@@ -260,4 +264,5 @@ class InputOutputCurves(FloydContext):
         ax.set(xlabel=r'$I_{\rm app}$, pA', ylabel='Mean firing rate, sp/s')
 
         # Save the figure
-        self.savefig(tag=self.p.groupname, tight_padding=0.2)
+        self.savefig(tag=f'{self.p.modeltype}_{self.p.neurontype}',
+                tight_padding=0.2)

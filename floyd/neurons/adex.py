@@ -8,6 +8,7 @@ from .coba import COBANeuronGroup
 
 from ..layout import HexagonalDiscLayout as HexLayout
 from ..spec import paramspec, Param
+from ..state import State
 
 
 class AdExGroup(COBANeuronGroup):
@@ -19,11 +20,11 @@ class AdExGroup(COBANeuronGroup):
         """
         if not hasattr(cls, '_Spec'):
             cls._Spec = paramspec(f'{cls.__name__}Spec',
-                C_m         = Param(200, 50, 300, 5, 'pF'),
+                C_m         = Param(200, 50, 400, 5, 'pF'),
                 g_L         = 25.0,
                 E_L         = -58.0,
                 E_exc       = 0.0,
-                E_inh       = -70.0,
+                E_inh       = -75.0,
                 I_DC_mean   = Param(0, 0, 1e3, 1e1, 'pA'),
                 g_tonic_exc = Param(0, 0, 100, 1, 'nS'),
                 g_tonic_inh = Param(0, 0, 100, 1, 'nS'),
@@ -34,7 +35,7 @@ class AdExGroup(COBANeuronGroup):
                 a           = Param(2, 0, 10, 0.1, 'nS'),
                 b           = Param(100, 0, 200, 5, 'pA'),
                 tau_w       = Param(30, 1, 300, 1, 'ms'),
-                tau_ref     = Param(1, 0, 10, 1, 'ms'),
+                tau_ref     = Param(1, 0, 10, 0.2, 'ms'),
                 tau_eta     = 10.0,
                 sigma       = Param(0, 0, 1e3, 1e1, 'pA'),
                 layout      = HexLayout.get_spec(

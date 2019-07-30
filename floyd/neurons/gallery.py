@@ -2,21 +2,17 @@
 Helper functions to create model neuron groups from reference points.
 """
 
-__all__ = ['create_LIF_interneurons', 'create_LIF_pyramids',
-           'create_AdEx_interneurons', 'create_AdEx_pyramids']
+from . import LIFGroup as _LIFGroup, AdExGroup as _AdExGroup
 
-
-from . import LIFGroup, AdExGroup
-
-from ..spec import paramspec
+from ..spec import paramspec as _paramspec
 
 
 def create_LIF_interneurons(return_spec=False, **params):
     """
     Donoso LIF interneuron.
     """
-    LIFSpec = LIFGroup.get_spec(return_factory=True)
-    spec = paramspec('LIFIntSpec', parent=LIFSpec, instance=True,
+    LIFSpec = _LIFGroup.get_spec(return_factory=True)
+    spec = _paramspec('LIFIntSpec', parent=LIFSpec, instance=True,
         C_m     = 100.0,
         g_L     = 10.0,
         E_L     = -65.0,
@@ -30,14 +26,14 @@ def create_LIF_interneurons(return_spec=False, **params):
         spec.update(**params)
     if return_spec:
         return spec
-    return LIFGroup('LIF_int', spec)
+    return _LIFGroup('LIF_int', spec)
 
 def create_LIF_pyramids(return_spec=False, **params):
     """
     Donoso LIF pyramidal cell.
     """
-    LIFSpec = LIFGroup.get_spec(return_factory=True)
-    spec = paramspec('LIFPyrSpec', parent=LIFSpec, instance=True,
+    LIFSpec = _LIFGroup.get_spec(return_factory=True)
+    spec = _paramspec('LIFPyrSpec', parent=LIFSpec, instance=True,
         C_m     = 275.0,
         g_L     = 25.0,
         E_L     = -67.0,
@@ -51,14 +47,14 @@ def create_LIF_pyramids(return_spec=False, **params):
         spec.update(**params)
     if return_spec:
         return spec
-    return LIFGroup('LIF_pyr', spec)
+    return _LIFGroup('LIF_pyr', spec)
 
 def create_AdEx_interneurons(return_spec=False, **params):
     """
     Malerba AdEx interneuron.
     """
-    AdExSpec = AdExGroup.get_spec(return_factory=True)
-    spec = paramspec('AdExIntSpec', parent=AdExSpec, instance=True,
+    AdExSpec = _AdExGroup.get_spec(return_factory=True)
+    spec = _paramspec('AdExIntSpec', parent=AdExSpec, instance=True,
         C_m   = 200.0,
         g_L   = 10.0,
         E_L   = -70.0,
@@ -76,14 +72,14 @@ def create_AdEx_interneurons(return_spec=False, **params):
         spec.update(**params)
     if return_spec:
         return spec
-    return AdExGroup('AdEx_int', spec)
+    return _AdExGroup('AdEx_int', spec)
 
-def create_AdEx_pyramids(return_spec=False, **params):
+def create_Malerba_AdEx_pyramids(return_spec=False, **params):
     """
     Malerba AdEx pyramidal cell.
     """
-    AdExSpec = AdExGroup.get_spec(return_factory=True)
-    spec = paramspec('AdExPyrSpec', parent=AdExSpec, instance=True,
+    AdExSpec = _AdExGroup.get_spec(return_factory=True)
+    spec = _paramspec('AdExPyrSpec', parent=AdExSpec, instance=True,
         C_m   = 200.0,
         g_L   = 10.0,
         E_L   = -58.0,
@@ -101,4 +97,29 @@ def create_AdEx_pyramids(return_spec=False, **params):
         spec.update(**params)
     if return_spec:
         return spec
-    return AdExGroup('AdEx_pyr', spec)
+    return _AdExGroup('AdEx_pyr', spec)
+
+def create_Brette_AdEx_pyramids(return_spec=False, **params):
+    """
+    Brette & Gerstner AdEx pyramidal cell.
+    """
+    AdExSpec = _AdExGroup.get_spec(return_factory=True)
+    spec = _paramspec('AdExPyrSpec', parent=AdExSpec, instance=True,
+        C_m   = 281.0,
+        g_L   = 30.0,
+        E_L   = -70.6,
+        E_inh = -75.0,
+        E_exc = 0.0,
+        V_t   = -50.4,
+        V_r   = -46.0,
+        V_thr = 0.0,
+        delta = 2.0,
+        a     = 4.0,
+        b     = 80.5,
+        tau_w = 144.0,
+    )
+    if params:
+        spec.update(**params)
+    if return_spec:
+        return spec
+    return _AdExGroup('AdEx_pyr', spec)

@@ -45,10 +45,10 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         path = step
         if tag is not None:
             path += f'+{tag}'
-        path += '.json'
         for p, specname, base in [('psim', 'SimSpec', 'simulation'),
                                   ('p', 'ModelSpec', 'model')]:
-            stem = os.path.join(self._ctxdir, path, base)
+            fn = f'{base}.json'
+            stem = os.path.join(self._ctxdir, path, fn)
             try:
                 setattr(self, p, paramspec(specname, instance=True,
                         **self.read_json(stem)))
@@ -102,6 +102,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
             self.out(logmsg, hideprefix=True)
 
         # Update global scope and shared state, then write out a JSON file
+        self.get_global_scope().update(self.psim)
         reset_state()
         State.update(self.psim)
         State.context = self

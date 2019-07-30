@@ -112,6 +112,11 @@ class Spec(object):
                 set_item(key, value, spec._klass)
 
         for key, value in keyvalues.items():
+            if key == '_spec_type':
+                if self._klass != value:
+                    self._klass = self.__class__.__name__ = value
+                    self._debug(f'updated to serialized name {self._klass!r}')
+                continue
             if type(value) is dict and '_spec_type' in value:
                 specname = value.pop('_spec_type')
                 value = paramspec(specname, instance=True, **value)

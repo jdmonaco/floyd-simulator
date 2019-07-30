@@ -198,8 +198,9 @@ class ModelRecorder(FloydObject):
             State.t += State.dt
             return
         if not self:
-            State.n -= 1  # the extra frame is not performed
-            self.out(f'Simulation complete (n = {State.n})', anybar='green')
+            State.context.hline()
+            self.out(f'Simulation complete (n = {State.n - 1:g} frames)',
+                     anybar='green')
             return
         if State.n == 0:
             State.context.hline()
