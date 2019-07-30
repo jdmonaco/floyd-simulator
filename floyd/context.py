@@ -19,7 +19,7 @@ from tenko.context import AbstractBaseContext, step
 from tenko.mixins import RandomMixin
 from roto.dicts import merge_two_dicts
 from maps.geometry import EnvironmentGeometry
-from pouty.console import purple as hilite
+from pouty.console import snow as hilite
 from pouty import debug_mode
 
 from .spec import paramspec
@@ -94,11 +94,11 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         for name, value in self.psim:
             logmsg = f'- {name} = {value!r}'.format(name, value)
             if modparams is not None and name in modparams:
-                modvalue = modparams.pop(name)
-                if modvalue != self.psim[name]:
+                pval = modparams.pop(name)
+                if pval != self.psim[name]:
                     logmsg = hilite(
-                        f'* {name} = {self.psim[name]!r} [default: {value!r}]')
-                    self.psim[name] = modvalue
+                        f'* {name} = {pval!r} [default: {self.psim[name]!r}]')
+                    self.psim[name] = pval
             self.out(logmsg, hideprefix=True)
 
         # Update global scope and shared state, then write out a JSON file
@@ -215,7 +215,8 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         )
 
         # Save the animation as a movie file
-        self['movie_file'] = self.filename(tag=tag, ext='mp4')
+        self['movie_file'] = self.filename(use_modname=True, use_runtag=True,
+                ext='mp4')
         anim.save(self.path(self.c.movie_file), fps=fps, dpi=dpi)
         State.simplot.closefig()
         self.hline()

@@ -195,7 +195,7 @@ class RealtimeTracesPlot(FloydObject):
             # Skip adding value if queue somehow advanced already
             # (This happens irregularly when creating movies for some reason.)
             q_name = self.q[name]
-            if len(q_name) >= N_q_t:
+            if N_q_t < self.q_max and len(q_name) >= N_q_t:
                 continue
 
             # Add value to rolling window trace or simple data trace

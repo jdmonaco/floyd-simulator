@@ -19,7 +19,7 @@ Config = AttrDict()
 
 Config.name = 'floyd'
 Config.figdpi = IMACPRO_DPI
-Config.moviedpi = IMACPRO_DPI
+Config.moviedpi = LG_ULTRAWIDE_DPI
 Config.screendpi = LG_ULTRAWIDE_DPI
 Config.fps = 100.0
 Config.progress_width = 80
