@@ -27,7 +27,7 @@ class OrnsteinUhlenbeckProcess(AutomaticCache):
         """
         Integrate the O-U processes to construct standardized noise signals.
         """
-        t = arange(0, State.duration + State.dt, State.dt)
+        self.t = t = arange(0, State.duration + State.dt, State.dt)
 
         self.Nt = t.size
         self.Nprogress = 0
@@ -46,10 +46,9 @@ class OrnsteinUhlenbeckProcess(AutomaticCache):
             self.progressbar(i)
         printf('\n')
 
-        self.t = t
-        self.Nt = t.size
+        self.mean = eta.mean(axis=1).mean()
         self.std = eta.std(axis=1).mean()
-        self.eta = eta / self.std
+        self.eta = (eta - self.mean) / self.std
 
     def generator(self):
         """

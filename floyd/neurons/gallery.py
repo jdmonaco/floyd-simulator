@@ -105,18 +105,21 @@ def create_Brette_AdEx_pyramids(return_spec=False, **params):
     """
     AdExSpec = _AdExGroup.get_spec(return_factory=True)
     spec = _paramspec('AdExPyrSpec', parent=AdExSpec, instance=True,
-        C_m   = 281.0,
-        g_L   = 30.0,
-        E_L   = -70.6,
-        E_inh = -75.0,
-        E_exc = 0.0,
-        V_t   = -50.4,
-        V_r   = -46.0,
-        V_thr = 0.0,
-        delta = 2.0,
-        a     = 4.0,
-        b     = 80.5,
-        tau_w = 144.0,
+        C_m           = 281.0,
+        g_L           = 30.0,
+        E_L           = -70.6,
+        E_inh         = -75.0,
+        E_exc         = 0.0,
+        V_t           = -50.4,
+        V_r           = -46.0,
+        V_thr         = 20.0,
+        delta         = 2.0,
+        a             = 4.0,
+        b             = 80.5,
+        tau_w         = 144.0,
+        tau_noise     = 0.0,
+        tau_noise_exc = 2.728,
+        tau_noise_inh = 10.49,
     )
     if params:
         spec.update(**params)

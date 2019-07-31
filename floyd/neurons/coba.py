@@ -17,11 +17,47 @@ from ..state import State, RunMode
 
 class COBANeuronGroup(BaseUnitGroup):
 
+    @classmethod
+    def get_spec(cls, return_factory=False, **keyvalues):
+        """
+        Return a Spec default factory function or instance with updated values.
+        """
+        if not hasattr(cls, '_Spec'):
+            cls._Spec = paramspec(f'{cls.__name__}Spec',
+                C_m           = Param(200, 50, 500, 5, 'pF'),
+                g_L           = 30.0,
+                E_L           = -60.0,
+                E_exc         = 0.0,
+                E_inh         = -75.0,
+                I_DC_mean     = Param(0, -1e3, 1e3, 1e1, 'pA'),
+                I_noise       = Param(0, -1e3, 1e3, 1e1, 'pA'),
+                g_tonic_exc   = Param(0, 0, 100, 1, 'nS'),
+                g_tonic_inh   = Param(0, 0, 100, 1, 'nS'),
+                g_noise_exc   = Param(0, 0, 100, 1, 'nS'),
+                g_noise_inh   = Param(0, 0, 100, 1, 'nS'),
+                V_r           = Param(-55, -85, -35, 1, 'mV'),
+                V_thr         = Param(-48, -85, 20, 1, 'mV'),
+                tau_ref       = Param(1, 0, 10, 0.1, 'ms'),
+                tau_noise     = 10.0,
+                tau_noise_exc = 3.0,
+                tau_noise_inh = 10.0,
+                layout        = HexLayout.get_spec(
+                    scale       = 0.1,
+                    radius      = 0.5,
+                    origin      = (0.5, 0.5),
+                    extent      = (0, 1, 0, 1),
+                    orientation = 0.0,
+                ),
+            )
+        if return_factory:
+            return cls._Spec
+        return cls._Spec(**keyvalues)
+
     base_dtypes = {'spikes':'?'}
     base_variables = ('x', 'y', 'v', 'spikes', 't_spike', 'g_total',
                       'g_total_inh', 'g_total_exc', 'excitability',
                       'I_app', 'I_net', 'I_leak', 'I_total_inh',
-                      'I_total_exc', 'I_noise')
+                      'I_total_exc', 'I_proxy')
 
     def __init__(self, name, spec, gain_param=(0, 10, 0.1, 'gain')):
         """
@@ -35,14 +71,28 @@ class COBANeuronGroup(BaseUnitGroup):
 
         BaseUnitGroup.__init__(self, self.N, name, spec=spec)
 
-        # Set up the intrinsic noise inputs depending on interaction mode
-        self.oup = OUProcess(N=self.N, tau=spec.tau_eta, seed=self.name)
+        # Set up the intrinsic noise inputs (current-based, excitatory
+        # conductance-based, and inhibitory conductance-based). In interactive
+        # run mode, generators are used to provide continuous noise.
+        self.oup = OUProcess(N=self.N, tau=spec.tau_noise, seed=self.name)
+        self.oup_exc = OUProcess(N=self.N, tau=spec.tau_noise_exc,
+                seed=self.name+'_excitatory')
+        self.oup_inh = OUProcess(N=self.N, tau=spec.tau_noise_inh,
+                seed=self.name+'_inhitatory')
         if State.run_mode == RunMode.INTERACT:
             self.eta_gen = self.oup.generator()
+            self.eta_gen_exc = self.oup_exc.generator()
+            self.eta_gen_inh = self.oup_inh.generator()
             self.eta = next(self.eta_gen)
+            self.eta_exc = next(self.eta_gen_exc)
+            self.eta_inh = next(self.eta_gen_inh)
         else:
             self.oup.compute(context=State.context)
+            self.oup_exc.compute(context=State.context)
+            self.oup_inh.compute(context=State.context)
             self.eta = self.oup.eta[...,0]
+            self.eta_exc = self.oup_exc.eta[...,0]
+            self.eta_inh = self.oup_inh.eta[...,0]
 
         # Initialize data structures
         self.S_inh = {}
@@ -138,11 +188,18 @@ class COBANeuronGroup(BaseUnitGroup):
         Update total input conductances for afferent synapses.
         """
         self.g_total_exc = self.p.g_tonic_exc
+        if self.p.g_noise_exc:
+            self.g_total_exc += self.p.g_noise_exc * self.eta_exc
+
         self.g_total_inh = self.p.g_tonic_inh
+        if self.p.g_noise_inh:
+            self.g_total_inh += self.p.g_noise_inh * self.eta_inh
+
         for gname in self.S_exc.keys():
             self.g_total_exc += self.g[gname] * self.S_exc[gname].g_total
         for gname in self.S_inh.keys():
             self.g_total_inh += self.g[gname] * self.S_inh[gname].g_total
+
         self.g_total = self.g_total_exc + self.g_total_inh
 
     def update_currents(self):
@@ -152,19 +209,23 @@ class COBANeuronGroup(BaseUnitGroup):
         self.I_leak      = self.p.g_L * (self.p.E_L - self.v)
         self.I_total_exc = self.g_total_exc * (self.p.E_exc - self.v)
         self.I_total_inh = self.g_total_inh * (self.p.E_inh - self.v)
-        self.I_noise     = self.p.sigma * self.eta
+        self.I_proxy     = self.p.I_noise * self.eta
         self.I_app       = self.p.I_DC_mean * self.excitability
-        self.I_net       = self.I_leak + self.I_app + self.I_noise + \
+        self.I_net       = self.I_leak + self.I_app + self.I_proxy + \
                                self.I_total_exc + self.I_total_inh
 
     def update_noise(self):
         """
-        Update the intrinsic noise source.
+        Update the intrinsic noise sources (for those with nonzero gains).
         """
         if State.run_mode == RunMode.INTERACT:
-            self.eta = next(self.eta_gen)
-            return
-        self.eta = self.oup.eta[...,State.n]
+            if self.p.I_noise: self.eta = next(self.eta_gen)
+            if self.p.g_noise_exc: self.eta_exc = next(self.eta_gen_exc)
+            if self.p.g_noise_inh: self.eta_inh = next(self.eta_gen_inh)
+        else:
+            if self.p.I_noise: self.eta = self.oup.eta[...,State.n]
+            if self.p.g_noise_exc: self.eta_exc = self.oup_exc.eta[...,State.n]
+            if self.p.g_noise_inh: self.eta_inh = self.oup_inh.eta[...,State.n]
 
     def update_metrics(self):
         """
