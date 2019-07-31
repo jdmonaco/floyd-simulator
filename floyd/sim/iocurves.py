@@ -136,11 +136,11 @@ class InputOutputCurves(FloydContext):
         ]
         simplot.add_realtime_traces_plot(*voltage_traces, fmt=ex_fmt,
                 datalim='none')
-        # rate_fn = lambda i: group.rates()[i]
-        # rate_traces = [
-                # ('rate', f'rate_{i}', partial(rate_fn, i)) for i in ex_units
-        # ]
-        # simplot.add_realtime_traces_plot(*rate_traces, fmt=ex_fmt)
+        rate_fn = lambda i: group.rates()[i]
+        rate_traces = [
+                ('rate', f'rate_{i}', partial(rate_fn, i)) for i in ex_units
+        ]
+        simplot.add_realtime_traces_plot(*rate_traces, fmt=ex_fmt)
         net_fn = lambda i: group.I_net[i]
         net_traces = [
                 ('net', f'I_net_{i}', partial(net_fn, i)) for i in ex_units
@@ -154,7 +154,7 @@ class InputOutputCurves(FloydContext):
         def init_figure():
             self.debug('init_figure called')
             simplot.draw_borders()
-            netgraph.plot(ax='rate')
+            netgraph.plot()
             return simplot.get_all_artists()
         simplot.init(init_figure)
 

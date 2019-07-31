@@ -30,3 +30,10 @@ from .mdtables import MarkdownTable, TableMaker
 from .layout   import FixedLayout, HexagonalDiscLayout
 from .samplers import *
 from .kernels  import *
+
+
+# Miscellaneous setup
+
+import warnings as _warnings
+from matplotlib import MatplotlibDeprecationWarning as _MPLdeprecate
+_warnings.filterwarnings('ignore', category=_MPLdeprecate)

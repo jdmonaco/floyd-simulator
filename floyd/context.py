@@ -260,6 +260,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         if 'netgraph' in State and State.netgraph is not None:
             if not State.simplot.network_graph_in_fig:
                 graph_figure = Matplotlib(object=State.netgraph.fig, dpi=dpi)
+                self.debug('created separate network graph figure')
 
         # Set up discrete player widget for play/pause control
         State.block = 0

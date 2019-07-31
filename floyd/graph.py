@@ -5,6 +5,7 @@ Network graph figure.
 import networkx as nx
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
 
 from toolbox.numpy import *
 
@@ -33,7 +34,7 @@ class NetworkGraph(FloydObject):
         self.N_groups = len(State.network.neuron_groups)
         self.pos = None
         self.nodes = None
-        self.labels = None
+        self.labels = []
         self.arrows = None
         self.artists = []
         self.colors = ones((self.N, 4))
@@ -50,7 +51,8 @@ class NetworkGraph(FloydObject):
         if self.fig is not None:
             plt.close(self.fig)
 
-    def plot(self, ax=None, figsize=(4, 4), lw=2, cmap='plasma', alpha=0.7):
+    def plot(self, ax=None, figsize=(4, 4), lw=2, cmap='plasma', alpha=0.7,
+        label_offset=0.1):
         """
         Draw the initial graph and store node, edge, and artist information.
         """
@@ -61,7 +63,6 @@ class NetworkGraph(FloydObject):
             self.ax.set_axis_off()
         if type(ax) is str and ax in State.simplot.axes:
             self.ax = State.simplot.axes[ax]
-        self.ax.axis('equal')
         self.cmap = plt.get_cmap(cmap)
         self.lw = lw
 
@@ -72,22 +73,47 @@ class NetworkGraph(FloydObject):
         # Node shapes can be any MPL marker: 'so^>v<dph8'.
         # matplotlib.collections.PathCollection instance
         self.nodes = nx.draw_networkx_nodes(self.G, pos, ax=self.ax,
-                node_shape='s', node_size=2.5e3, alpha=alpha, linewidths=0.3,
+                node_shape='o', node_size=1e3, alpha=alpha, linewidths=1,
                 vmin=0, vmax=1, edgecolors='k', node_color='w')
         self.colors[:,-1] = alpha
         self.nodes.set_zorder(-10)
 
         # Draw the labels.
         # Dict of labels keyed on the nodes.
-        self.labels = nx.draw_networkx_labels(self.G, pos, ax=self.ax,
-                font_size=12, font_color='c', font_weight='bold', alpha=1.0)
-        for label in self.labels.values():
-            label.set_zorder(10)
+        labels = nx.draw_networkx_labels(self.G, pos, ax=self.ax,
+                font_size=12, font_color='#2c88f0', font_weight='bold',
+                zorder=10)
+        self.labels = list(labels.values())
+
+        # Add vertical offset and path effects outline to labels to avoid
+        # visual conflict with node and arrows
+        dx = label_offset * float(diff(self.ax.get_ylim()))
+        dy = label_offset * float(diff(self.ax.get_ylim()))
+        ymid = np.mean(self.ax.get_ylim())
+        offset = max(dx, dy)
+        for label in self.labels:
+            x, y = label.get_position()
+            if y >= ymid:
+                label.set_position((x, y + offset))
+            else:
+                label.set_position((x, y + offset))
+            label.set_path_effects([
+                path_effects.Stroke(linewidth=3, foreground='white'),
+                path_effects.Normal(),
+            ])
+
+        # Zoom out the axes to accommodate offset labels and larger nodes
+        xmin, xmax = self.ax.get_xlim()
+        ymin, ymax = self.ax.get_ylim()
+        dx = label_offset * (xmax - xmin)
+        dy = label_offset * (ymax - ymin)
+        self.ax.set_xlim(xmin - dx, xmax + dx)
+        self.ax.set_ylim(ymin - dy, ymax + dy)
 
         # Draw the edges.
         # List of matplotlib.patches.FancyArrowPatch
         self.arrows = nx.draw_networkx_edges(self.G, pos, ax=self.ax,
-                alpha=alpha, arrowstyle='-|>', arrowsize=32, arrows=True,
+                alpha=alpha, arrowstyle='-|>', arrowsize=36, arrows=True,
                 connectionstyle='angle3')
         for arrow in self.arrows:
             arrow.set_zorder(0)
@@ -100,7 +126,8 @@ class NetworkGraph(FloydObject):
             (A, B), attrs = edge
             arrow = self.arrows[i]
             if A.startswith('Stim'):
-                arrow.set_linestyle('--')
+                arrow.set_arrowstyle('wedge')
+                arrow.set_color('#25f077')
                 continue
             S = attrs['object']
             if S.transmitter == 'GABA':
@@ -111,7 +138,7 @@ class NetworkGraph(FloydObject):
             arrow.set_linewidth(lw * (W[i] - mu) / sigma)
 
         self.artists = [self.nodes]
-        self.artists.extend(list(self.labels.values()))
+        self.artists.extend(self.labels)
         self.artists.extend(self.arrows)
 
         if 'simplot' in State:

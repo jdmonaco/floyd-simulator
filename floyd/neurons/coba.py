@@ -199,7 +199,7 @@ class COBANeuronGroup(BaseUnitGroup):
         """
         return self.activity.get_activity()
 
-    def set_pulse_metrics(self, active=(10, 90, 10), rate=(1, 70, 10),
+    def set_pulse_metrics(self, active=(10, 90, 30), rate=(1, 70, 25),
         only_active=True):
         """
         Set (min, max, smoothness) for active fraction and mean rate.
@@ -220,6 +220,9 @@ class COBANeuronGroup(BaseUnitGroup):
             rpulse = self.rate_pulse(self.activity.get_active_mean_rate())
         else:
             rpulse = self.rate_pulse(self.activity.get_mean_rate())
-        if abs(apulse) > abs(rpulse):
-            return apulse
-        return rpulse
+
+        # As in kurtosis calculations, use the 4th power to emphasize
+        # the extremities, then the mean tells you at least one or the other is
+        # currently at extremes.
+
+        return (apulse**4 + rpulse**4) / 2
