@@ -2,18 +2,27 @@
 Global state for simulations.
 """
 
-__all__ = ['State']
+__all__ = ['State', 'reset_state', 'RunMode']
 
+
+from enum import Enum
 
 from roto.dicts import AttrDict
 
 
-State = AttrDict()
+class RunMode(Enum):
+    ANIMATE  = 'for creating movies'
+    INTERACT = 'for interactive dashboards'
+    RECORD   = 'for collecting data'
+
 
 def reset_state():
     keys = list(State.keys())
     for key in keys:
         State[key] = None
+
+
+State = AttrDict()
 
 
 #
@@ -32,4 +41,4 @@ State.calcwin   = 25.0
 State.figw      = 8
 State.figh      = 6
 State.figdpi    = 144
-State.interact  = False
+State.run_mode  = RunMode.INTERACT

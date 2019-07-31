@@ -24,7 +24,7 @@ from pouty import debug_mode
 
 from .spec import paramspec
 from .network import Network
-from .state import State, reset_state
+from .state import State, RunMode, reset_state
 from .config import Config
 
 
@@ -50,11 +50,15 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
             fn = f'{base}.json'
             stem = os.path.join(self._ctxdir, path, fn)
             try:
-                setattr(self, p, paramspec(specname, instance=True,
-                        **self.read_json(stem)))
+                p_json = self.read_json(stem)
             except Exception as e:
                 self.out(stem, prefix='MissingJSONFile', warning=True)
             else:
+                # Manually de-serialize the run_mode key
+                if 'run_mode' in p_json:
+                    modename = p_json['run_mode'].upper()
+                    p_json['run_mode'] = RunMode[modename]
+                setattr(self, p, paramspec(specname, instance=True, **p_json))
                 self.out(stem, prefix=f'{base.title()}Parameters')
 
     def set_simulation_parameters(self, modparams=None, **simparams):
@@ -80,13 +84,19 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                 figdpi    = Config.figdpi,
                 tracewin  = Config.tracewin,
                 calcwin   = Config.calcwin,
-                interact  = Config.interact,
+                run_mode  = Config.run_mode,
                 debug     = Config.debug,
         )
 
         # Add derived values (e.g., blocksize) to the simulation parameters
         simparams.update(blocksize=int(simparams.get('dt_block',
                 Config.dt_block) / simparams.get('dt', Config.dt)))
+        for p in (simparams, modparams):
+            if p is None:
+                continue
+            if 'run_mode' in p and type(p['run_mode']) is str:
+                modename = p['run_mode'].upper()
+                p['run_mode'] = RunMode[modename]
 
         # Update from model parameters and log differences with defaults
         self.out(f'Simulation parameters:')
@@ -101,12 +111,16 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                     self.psim[name] = pval
             self.out(logmsg, hideprefix=True)
 
-        # Update global scope and shared state, then write out a JSON file
+        # Update global scope and shared state
         self.get_global_scope().update(self.psim)
         reset_state()
         State.update(self.psim)
         State.context = self
-        self.write_json(self.psim.as_dict(), 'simulation')
+
+        # Manually serialize the run_mode key and then write a JSON file
+        psim_dict = self.psim.as_dict()
+        psim_dict.update(run_mode=psim_dict['run_mode'].name.lower())
+        self.write_json(psim_dict, 'simulation')
 
         # Initialize the 'magic' network object
         State.network = Network()
@@ -184,7 +198,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                 figdpi   = Config.figdpi,   # dots/inch, figure resolution
                 tracewin = Config.tracewin, # ms, trace plot window
                 calcwin  = Config.calcwin,  # ms, rolling calculation window
-                interact = Config.interact, # run in interactive mode
+                run_mode = Config.run_mode, # set the run mode
                 debug    = Config.debug,    # run in debug mode
         )
         self.set_model_parameters(params, pfile=pfile,
@@ -200,8 +214,8 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         """
         Simulate the model in batch mode for movie generation.
         """
-        # Run the simulation in the non-interactive animation mode
-        params.update(interact=False)
+        # Run the simulation in the animation run mode
+        params.update(run_mode=RunMode.ANIMATE)
         self.setup_model(pfile=pfile, **params)
 
         anim = FuncAnimation(
@@ -214,15 +228,11 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                 blit      = True,
         )
 
-        # Save the animation as a movie file
+        # Save the animation as a movie file and play the movie!
         self['movie_file'] = self.filename(use_modname=True, use_runtag=True,
                 ext='mp4')
         anim.save(self.path(self.c.movie_file), fps=fps, dpi=dpi)
         State.simplot.closefig()
-        self.hline()
-
-        # Save simulation data traces and play the movie!
-        State.recorder.save()
         self.hline()
         self.play_movie()
 
@@ -231,8 +241,8 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         """
         Simulate the model in batch mode for data collection.
         """
-        # Run the simulation in the non-interactive data collection mode
-        params.update(interact=False)
+        # Run the simulation in the data collection run mode
+        params.update(run_mode=RunMode.RECORD)
         self.setup_model(pfile=pfile, **params)
 
         # Run the main loop until exhaustion
@@ -248,8 +258,8 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         """
         Construct an interactive Panel dashboard for running the model.
         """
-        # Run the simulation in the interactive dashboard mode
-        params.update(interact=True)
+        # Run the simulation in the interactive run mode
+        params.update(run_mode=RunMode.INTERACT)
         self.setup_model(pfile=pfile, **params)
 
         # Main figure Matplotlib pane object will be manually updated

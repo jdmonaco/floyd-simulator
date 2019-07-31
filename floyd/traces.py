@@ -9,7 +9,7 @@ import numpy as np
 from numpy import cumsum, inf
 
 from .base import FloydObject
-from .state import State
+from .state import State, RunMode
 
 
 class RealtimeTracesPlot(FloydObject):
@@ -123,13 +123,17 @@ class RealtimeTracesPlot(FloydObject):
         self.axobjs = set(self.ax.values())
 
         if type(datalim) in (int, float):
-            if (State.interact and datalim <= State.dt_block) or \
-                    (datalim <= State.dt) or (datalim <= 0):
+            if (State.run_mode == RunMode.INTERACT and \
+                    datalim <= State.dt_block) or \
+                        (datalim <= State.dt) or (datalim <= 0):
                 self.datalim = 'auto'
             else:
                 self.datalim = 'relax'
                 self._datalim_relax = datalim
-                dt = State.dt_block if State.interact else State.dt
+                if State.run_mode == RunMode.INTERACT:
+                    dt = State.dt_block
+                else:
+                    dt = State.dt
                 self.shrink = dt / self._datalim_relax
         else:
             self.datalim = datalim
@@ -154,7 +158,7 @@ class RealtimeTracesPlot(FloydObject):
         if units is not None:
             self.legend_label_templ += f' {units}'
 
-        if State.interact:
+        if State.run_mode == RunMode.INTERACT:
             self.plot()
 
     def plot(self):

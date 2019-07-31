@@ -47,7 +47,7 @@ class InputStimulator(FloydObject):
         Note: Target should be a BaseUnitGroup subclass. The variable should be
         the name of an array variable or a spec parameter in 'target.p'.
         """
-        self.name = f'Stim:{target}.{variable}'
+        self.name = f'Stim:{variable}'
         FloydObject.__init__(self, self.name)
         self.target = target
         self.variable = variable

@@ -9,6 +9,8 @@ from roto.dicts import AttrDict
 
 from toolbox import IMACPRO_DPI, LG_ULTRAWIDE_DPI
 
+from .state import RunMode
+
 
 Config = AttrDict()
 
@@ -39,11 +41,12 @@ Config.figw = 12.0
 Config.figh = 9.0
 Config.tracewin = 100.0
 Config.calcwin = 25.0
-Config.interact = True
 Config.debug = False
+Config.run_mode = RunMode.INTERACT
+
 
 #
-# Neurophysiology
+# Domain-specific parameter defaults
 #
 
 Config.g_LFP = 1e3  # nS, ~1 uS

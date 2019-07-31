@@ -2,15 +2,27 @@
 Simulation plotting for interactive dashboards or batched movie creation.
 """
 
+import functools
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
 from roto.dicts import merge_two_dicts
+from roto.null import Null
 
 from .traces import RealtimeTracesPlot
 from .base import FloydObject
-from .state import State
+from .state import State, RunMode
+
+
+def block_record_mode(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        if State.run_mode == RunMode.RECORD:
+            return Null
+        return func(*args, **kwargs)
+    return wrapper
 
 
 class SimulationPlotter(FloydObject):
@@ -28,8 +40,12 @@ class SimulationPlotter(FloydObject):
         self.nrows = nrows
         self.ncols = ncols
         self.figsize = (State.figw, State.figh)
-        self.fig = plt.figure(num='simplot', clear=True, figsize=self.figsize,
-                              dpi=State.figdpi)
+        if State.run_mode == RunMode.RECORD:
+            self.fig = Null
+        else:
+            self.fig = plt.figure(num='simplot', clear=True,
+                                  figsize=self.figsize, dpi=State.figdpi)
+            plt.ioff()
         self.gs = GridSpec(nrows, ncols, self.fig, 0, 0, 1, 1, 0, 0)
         self.axes = {}
         self.axes_objects = []
@@ -39,7 +55,6 @@ class SimulationPlotter(FloydObject):
         self.initializer = None
         self.network_graph = None
         self.network_graph_in_fig = False
-        plt.ioff()
 
         State.simplot = self
 
@@ -49,6 +64,7 @@ class SimulationPlotter(FloydObject):
         """
         return axname in self.axes
 
+    @block_record_mode
     def set_axes(self, **named_axes):
         """
         Create named axes plots from subplot specs based on the `gs` gridspec.
@@ -64,6 +80,7 @@ class SimulationPlotter(FloydObject):
         for ax in self.axes_objects:
             ax.set_axis_off()
 
+    @block_record_mode
     def get_axes(self, *names):
         """
         Return a list of axes objects keyed by name (or a single axes).
@@ -72,22 +89,25 @@ class SimulationPlotter(FloydObject):
             return self.axes[names[0]]
         return [self.axes[name] for name in names]
 
-    def update_plots(self, animation=False):
+    @block_record_mode
+    def update_plots(self):
         """
         Update the timestamp and all registered plots with new data.
         """
         [updater() for _, updater in self.plots]
         [rtp.update_plots() for rtp in self.traceplots]
-        if not animation or self.network_graph_in_fig:
+        if State.run_mode == RunMode.INTERACT or self.network_graph_in_fig:
             self.network_graph.update()
         return self.fig
 
+    @block_record_mode
     def update_traces_data(self):
         """
         Update only the data trace plots (for continuous tracing).
         """
         [rtp.update_data() for rtp in self.traceplots]
 
+    @block_record_mode
     def register_plot(self, handle, updater):
         """
         Register a plot to be updated using the given update function.
@@ -97,6 +117,7 @@ class SimulationPlotter(FloydObject):
         self.plots.append((handle, updater))
         self.out('Artist: {}', handle, prefix='SimPlotRegistrar')
 
+    @block_record_mode
     def register_network_graph(self, netgraph):
         """
         Set a NetworkGraph instance to be updated during the simulation.
@@ -106,6 +127,7 @@ class SimulationPlotter(FloydObject):
         self.out('Graph: {} (main figure = {})', netgraph,
                 self.network_graph_in_fig, prefix='SimPlotRegistrar')
 
+    @block_record_mode
     def add_realtime_traces_plot(self, *traceplot, **tracekw):
         """
         Create and register a RealtimeTracesPlot with the simulation.
@@ -117,6 +139,7 @@ class SimulationPlotter(FloydObject):
         self.out(f'Trace: {rtp!r}', prefix='SimPlotRegistrar')
         self.traceplots.append(rtp)
 
+    @block_record_mode
     def draw_borders(self, color='k', linewidth=1, bottom=None, right=None):
         """
         Draw borders around each of the plots.
@@ -145,16 +168,18 @@ class SimulationPlotter(FloydObject):
             if r == 1.0 or (right is not None and name in right):
                 ax.plot([1,1], [0,1], **pkw)  # right
 
+    @block_record_mode
     def init(self, initializer):
         """
         Run the figure initialization function (only in interactive mode).
         """
         self.initializer = initializer
-        if State.interact:
+        if State.run_mode == RunMode.INTERACT:
             self.init_timestamp()
             initializer()
             self.closefig()
 
+    @block_record_mode
     def closefig(self):
         """
         Close the figure.
@@ -167,8 +192,8 @@ class SimulationPlotter(FloydObject):
         """
         Save the list of artists in batch mode to be returned from initializer.
         """
-        if State.interact:
-            return
+        if State.run_mode == RunMode.INTERACT:
+            return Null
 
         if self.artists:
             return self.artists

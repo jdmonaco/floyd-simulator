@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 
 from .base import FloydObject
-from .state import State
+from .state import State, RunMode
 
 
 class Network(FloydObject):
@@ -174,7 +174,7 @@ class Network(FloydObject):
         """
         self.model_update()
         State.simplot.update_traces_data()
-        self.display_update(animation=True)
+        self.display_update()
         return State.simplot.artists
 
     def model_update(self):
@@ -192,12 +192,12 @@ class Network(FloydObject):
         for synapses in self.synapses:
             synapses.update()
 
-    def display_update(self, animation=False):
+    def display_update(self):
         """
         Update main simulation figure (and tables in interactive mode).
         """
-        State.simplot.update_plots(animation=animation)
-        if State.interact:
+        State.simplot.update_plots()
+        if State.run_mode == RunMode.INTERACT:
             State.tablemaker.update()
 
     def reset(self):

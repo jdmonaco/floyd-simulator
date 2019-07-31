@@ -22,17 +22,17 @@ class InputOutputCurves(FloydContext):
         self.set_simulation_parameters(params,
             title    = f"Analysis of {params['modeltype']}/"
                        f"{params['neurontype']} Neurons",
-            rnd_seed = None,   # str, RNG seed (None: class name)
-            duration = 5000.0, # ms, total simulation length
-            dt       = 0.1,    # ms, single-update timestep
-            dt_rec   = 0.1,    # ms, recording sample timestep
-            dt_block = 25.0,   # ms, dashboard update timestep
-            figw     = 9.0,    # inches, main figure width
-            figh     = 9.0,    # inches, main figure height
-            tracewin = 100.0,  # ms, trace plot window
-            calcwin  = 50.0,   # ms, rolling calculation window
-            interact = False,  # run in interactive mode
-            debug    = False,  # run in debug mode
+            rnd_seed = None,     # str, RNG seed (None: class name)
+            duration = 5000.0,   # ms, total simulation length
+            dt       = 0.1,      # ms, single-update timestep
+            dt_rec   = 0.1,      # ms, recording sample timestep
+            dt_block = 25.0,     # ms, dashboard update timestep
+            figw     = 9.0,      # inches, main figure width
+            figh     = 9.0,      # inches, main figure height
+            tracewin = 100.0,    # ms, trace plot window
+            calcwin  = 50.0,     # ms, rolling calculation window
+            run_mode = 'record', # run in data collection mode
+            debug    = False,    # run in debug mode
         )
         self.set_model_parameters(params, pfile=pfile,
             N_pulses    = 33,     # number of test pulses

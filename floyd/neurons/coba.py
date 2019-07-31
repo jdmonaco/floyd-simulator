@@ -12,7 +12,7 @@ from ..activity import FiringRateWindow
 from ..spec import paramspec, Param
 from ..groups import BaseUnitGroup
 from ..config import Config
-from ..state import State
+from ..state import State, RunMode
 
 
 class COBANeuronGroup(BaseUnitGroup):
@@ -37,7 +37,7 @@ class COBANeuronGroup(BaseUnitGroup):
 
         # Set up the intrinsic noise inputs depending on interaction mode
         self.oup = OUProcess(N=self.N, tau=spec.tau_eta, seed=self.name)
-        if State.interact:
+        if State.run_mode == RunMode.INTERACT:
             self.eta_gen = self.oup.generator()
             self.eta = next(self.eta_gen)
         else:
@@ -161,7 +161,7 @@ class COBANeuronGroup(BaseUnitGroup):
         """
         Update the intrinsic noise source.
         """
-        if State.interact:
+        if State.run_mode == RunMode.INTERACT:
             self.eta = next(self.eta_gen)
             return
         self.eta = self.oup.eta[...,State.n]

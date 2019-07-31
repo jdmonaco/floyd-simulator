@@ -10,6 +10,7 @@ import matplotlib.patheffects as path_effects
 from toolbox.numpy import *
 
 from .base import FloydObject
+from .config import Config
 from .state import State
 
 
@@ -52,13 +53,13 @@ class NetworkGraph(FloydObject):
             plt.close(self.fig)
 
     def plot(self, ax=None, figsize=(4, 4), lw=2, cmap='plasma', alpha=0.7,
-        label_offset=0.1):
+        label_offset=0.12, axes_zoom=0.18):
         """
         Draw the initial graph and store node, edge, and artist information.
         """
         if ax is None:
             self.fig = plt.figure(num='network-graph', clear=True,
-                    figsize=figsize)
+                    figsize=figsize, dpi=Config.screendpi)
             self.ax = plt.axes([0,0,1,1])
             self.ax.set_axis_off()
         if type(ax) is str and ax in State.simplot.axes:
@@ -96,17 +97,17 @@ class NetworkGraph(FloydObject):
             if y >= ymid:
                 label.set_position((x, y + offset))
             else:
-                label.set_position((x, y + offset))
+                label.set_position((x, y - offset))
             label.set_path_effects([
                 path_effects.Stroke(linewidth=3, foreground='white'),
                 path_effects.Normal(),
             ])
 
-        # Zoom out the axes to accommodate offset labels and larger nodes
+        # Zoom to accommodate large labels and label offsets, etc.
         xmin, xmax = self.ax.get_xlim()
         ymin, ymax = self.ax.get_ylim()
-        dx = label_offset * (xmax - xmin)
-        dy = label_offset * (ymax - ymin)
+        dx = axes_zoom * (xmax - xmin)
+        dy = axes_zoom * (ymax - ymin)
         self.ax.set_xlim(xmin - dx, xmax + dx)
         self.ax.set_ylim(ymin - dy, ymax + dy)
 
@@ -128,6 +129,7 @@ class NetworkGraph(FloydObject):
             if A.startswith('Stim'):
                 arrow.set_arrowstyle('wedge')
                 arrow.set_color('#25f077')
+                arrow.set_alpha(alpha)
                 continue
             S = attrs['object']
             if S.transmitter == 'GABA':

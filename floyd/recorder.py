@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .base import FloydObject
-from .state import State
+from .state import State, RunMode
 from .config import Config
 
 
@@ -59,7 +59,7 @@ class ModelRecorder(FloydObject):
         State.t = -State.dt
         self.Nprogress = 0
         self.show_progress = show_progress and not (
-                             State.debug or State.interact)
+                         State.debug or State.run_mode == RunMode.INTERACT)
 
         # Recording time tracking
         self.ts_rec = np.arange(0, State.duration + State.dt_rec, State.dt_rec)
@@ -82,34 +82,35 @@ class ModelRecorder(FloydObject):
 
         # Use the keywords and intial values to automatically set up monitors
         # for model variables, states, and spike/event signals
-        for name, data in initial_values.items():
-            record = True
-            if type(data) is tuple:
-                if len(data) != 2:
-                    self.out('Tuple values must have length 2', warning=True)
-                    continue
-                data, record = data
+        if State.run_mode == RunMode.RECORD:
+            for name, data in initial_values.items():
+                record = True
+                if type(data) is tuple:
+                    if len(data) != 2:
+                        self.out('Tuple values must be length 2', warning=True)
+                        continue
+                    data, record = data
 
-            if isinstance(data, np.ndarray):
-                if data.dtype == bool:
-                    self.add_spike_monitor(name, data, record=record)
+                if isinstance(data, np.ndarray):
+                    if data.dtype == bool:
+                        self.add_spike_monitor(name, data, record=record)
+                    else:
+                        self.add_variable_monitor(name, data, record=record)
+                elif np.isscalar(data):
+                    try:
+                        state_value = float(data)
+                    except ValueError:
+                        self.out('Not a scalar: {!r}', data, warning=True)
+                        continue
+                    else:
+                        self.add_state_monitor(name, state_value)
                 else:
-                    self.add_variable_monitor(name, data, record=record)
-            elif np.isscalar(data):
-                try:
-                    state_value = float(data)
-                except ValueError:
-                    self.out('Not a scalar number: {!r}', data, warning=True)
-                    continue
-                else:
-                    self.add_state_monitor(name, state_value)
-            else:
-                self.out('Not an array or state: {!r}', data, warning=True)
+                    self.out('Not an array or state: {!r}', data, warning=True)
 
         State.recorder = self
 
     def __bool__(self):
-        if State.interact:
+        if State.run_mode == RunMode.INTERACT:
             return True
         return State.n < State.N_t
 
@@ -194,7 +195,7 @@ class ModelRecorder(FloydObject):
         Update the time series, variable monitors, and state monitors.
         """
         State.n += 1
-        if State.interact:
+        if State.run_mode == RunMode.INTERACT:
             State.t += State.dt
             return
         if not self:
@@ -207,7 +208,12 @@ class ModelRecorder(FloydObject):
 
         # Update simulation time and progress bar output
         State.t = State.ts[State.n]
-        self.progressbar()
+        if self.show_progress:
+            self.progressbar()
+
+        # No recording in anything but data collection mode
+        if State.run_mode != RunMode.RECORD:
+            return
 
         # Record spike/event timing at every simulation timestep
         for name, data in self.events.items():
@@ -252,14 +258,10 @@ class ModelRecorder(FloydObject):
         for name in self.state_traces.keys():
             self.state_traces[name][self.n_rec] = State[name]
 
-        self.debug(f'record @ t = {self.t_rec:.3f} ms')
-
     def progressbar(self, filled=False, color='purple'):
         """
         Once-per-update console output for a simulation progress bar.
         """
-        if not self.show_progress:
-            return
         State.progress = pct = (State.n + 1) / State.N_t
         barpct = self.Nprogress / Config.progress_width
         while barpct < pct:
@@ -271,8 +273,8 @@ class ModelRecorder(FloydObject):
         """
         Save monitored state, variable, and spike/event recordings.
         """
-        if State.interact:
-            self.out('No recordings in interactive mode', warning=True)
+        if State.run_mode != RunMode.RECORD:
+            self.out('Must be in RECORD mode to save data', warning=True)
             return
 
         for name in self.events.keys():
