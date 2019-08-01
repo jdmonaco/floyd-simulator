@@ -109,6 +109,7 @@ class COBANeuronGroup(BaseUnitGroup):
         self.activity = FiringRateWindow(self)
 
         # Intialize some variables
+        self.v = self.E_L
         self.x = self.layout.x
         self.y = self.layout.y
         self.t_spike = -inf

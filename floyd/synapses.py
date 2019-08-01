@@ -41,18 +41,26 @@ def g_peak_from_psp(PSP_mV, p, g_peak, C_m, E_syn, E_L):
     return PSP_mV / dV
 
 
-SynapsesSpec = paramspec('SynapsesSpec',
-            transmitter='glutamate',
-            g_max=1.0,
-            tau_r=0.5,
-            tau_d=2.0,
-            tau_l=1.0,
-            tau_max=25.0,
-            failures=False,
-)
+class Synapses(RandomMixin, BaseUnitGroup):
 
-
-class Synapses(RandomMixin,BaseUnitGroup):
+    @classmethod
+    def get_spec(cls, return_factory=False, **keyvalues):
+        """
+        Return a Spec default factory function or instance with updated values.
+        """
+        if not hasattr(cls, '_Spec'):
+            cls._Spec = paramspec(f'{cls.__name__}Spec',
+                transmitter = 'glutamate',
+                g_max       = 1.0,
+                tau_r       = 0.5,
+                tau_d       = 2.0,
+                tau_l       = 1.0,
+                tau_max     = 25.0,
+                failures    = False,
+            )
+        if return_factory:
+            return cls._Spec
+        return cls._Spec(**keyvalues)
 
     base_variables = ('C', 'S', 't_spike', 'dt_spike', 'g', 'g_peak', 'p_r')
 
@@ -104,19 +112,16 @@ class Synapses(RandomMixin,BaseUnitGroup):
 
         self.out('\n'.join(stats))
 
-    def set_delays(self, cond_velocity=None):
+    def set_delays(self, cond_velocity=0.5):
         """
         Construct spike-transmission conduction delay lines.
         """
         if not hasattr(self, 'active_post'):
             raise RuntimeError('synapses must be connected first!')
-        if cond_velocity is None:
-            cond_velocity = State.context.p.cond_velocity
         timing = self.distances / cond_velocity
         self.delay = DelayLines.from_delay_times(self.N, timing[self.ij],
                 State.dt, dtype='?')
-        self.out('{}: max delay = {} timesteps', self.name,
-                self.delay.delays.max(), prefix='DelayLines')
+        self.out('max delay = {} timesteps', self.delay.delays.max())
 
     def update(self):
         """

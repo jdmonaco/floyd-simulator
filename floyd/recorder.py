@@ -17,8 +17,8 @@ class ModelRecorder(FloydObject):
 
     Notes
     -----
-    (1) In the simulation loop, update() should be called first so that
-    initial values at t=0 are stored, followed by variable updates.
+    (1) In the simulation loop, ModelRecorder.update() should be called first
+    so that initial values at t=0 are stored, followed by variable updates.
 
     (2) Variable arrays are stored by reference and require that updated
     variables use the same data buffers throughout the simulation.
@@ -29,14 +29,8 @@ class ModelRecorder(FloydObject):
     described in the last sentence, and (2) a `record` value to be passed to
     one of the `add_*_monitor` methods as described in note #4.
 
-    (4) In the simulation loop, `update` should be called first so that initial
-    values at t=0 are stored, followed by model updates of the variables. Set
-    `record` to a list of indexes (for axis 0 of data) or a scalar integer
-    index for selective recordings.
-
-    (5) Updated state values must be passed to `update` as keyword arguments,
-    but variable and spike/event references are stored and do not need to be
-    passed in.
+    (4) Set `record` to a list of indexes (for axis 0 of data) or a scalar
+    integer index for selective recordings.
     """
 
     def __init__(self, show_progress=True, **initial_values):
