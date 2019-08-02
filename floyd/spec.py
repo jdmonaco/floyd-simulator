@@ -7,10 +7,13 @@ try:
 except ImportError:
     print('Warning: install `panel` to use interactive dashboards.')
 
+import copy
+import inspect
 from collections import namedtuple
 
 from pouty.console import ConsolePrinter, log
 from roto.dicts import AttrDict, Tree
+from tenko.base import TenkoObject
 
 from .state import State
 
@@ -33,242 +36,312 @@ newspec1 = NewSpec(c=3)
 > The `c=3` value overrides the `c=4` value from myspec2.
 """
 
-def paramspec(name, parent=None, instance=False, **defaults):
+# Code from Param (PyViz project)
+
+def classlist(klass):
+    return inspect.getmro(klass)[::-1]
+
+def get_all_slots(klass):
+    # A subclass's __slots__ attribute does not contain slots defined
+    # in its superclass (the superclass' __slots__ end up as
+    # attributes of the subclass).
+    all_slots = []
+    parent_param_classes = [c for c in classlist(klass)[1::]]
+    for c in parent_param_classes:
+        if hasattr(c, '__slots__'):
+            all_slots += c.__slots__
+    return all_slots
+
+def get_occupied_slots(instance):
+    return [slot for slot in get_all_slots(type(instance))
+            if hasattr(instance, slot)]
+
+# End Param code
+
+
+class Param(object):
+
     """
-    Create a factory closure for named Spec objects with optional parent spec.
+    A class attribute instance defining properties of inheritable values.
     """
-    class TempSpec(Spec): pass
-    TempSpec.__name__ = name
-    def getspec(spec=None, **keyvalues):
-        newspec = TempSpec(spec=parent, **defaults)
-        newspec.update(spec=spec, **keyvalues)
-        return newspec
-    if instance:
-        return getspec()
-    return getspec
 
-def is_param(p):
-    for attr in _param_attrs:
-        if not hasattr(p, attr):
-            return False
-    return True
+    __slots__ = ['default', 'start', 'end', 'step', 'dtype', 'doc', 'units',
+                 'widget', 'owner', 'attrname']
 
-def is_spec(s):
-    return hasattr(s, '_speckeys')
+    def __init__(self, default=None, start=None, end=None, step=None,
+        dtype=None, doc=None, units=None, widget=None):
+        if default is None:
+            raise ValueError('Param instances must have a default value')
+        self.default = default
+        self.start = start
+        self.end = end
+        self.step = step
+        self.dtype = dtype
+        self.doc = doc
+        self.units = units
+        self.widget = widget
+        self.owner = None
+        self.attrname = None
+
+    def __repr__(self):
+        attrs = [f'{a}={getattr(self, a)!r}' for a in self.__slots__
+                     if getattr(self, a) is not None and \
+                         a not in ('owner', 'attrname')]
+        return self.__class__.__name__ + '(' + ', '.join(attrs) + ')'
+
+    def update(self, p):
+        """
+        Update slots with values from another Param instance.
+        """
+        for slot in get_all_slots(type(self)):
+            if hasattr(p, slot):
+                setattr(self, slot, getattr(p, slot))
+
+    # TODO: I think Params need to be data descriptors to get the instance
+    # attribute accessor to work
+
+    def __get__(self, name, type=None):
+        pass
+
+    def __set__(self, name, type=None):
+        pass
+
+    # Code from Param (PyViz project)
+
+    def __getstate__(self):
+        state = {}
+        for slot in get_occupied_slots(self):
+            state[slot] = getattr(self, slot)
+        return state
+
+    def __setstate__(self, state):
+        for k, v in state.items():
+            setattr(self, k, v)
+
+    # End Param code
 
 
-_param_attrs = ['value', 'start', 'end', 'step', 'note']
-
-Param = namedtuple('Param', _param_attrs)
+_attrname = lambda n: f'_{n}_specified_value'
 
 
-class Spec(object):
+class Specified(TenkoObject):
 
     """
     Self-validating attribute stores of restricted key-value sets.
     """
 
-    def __init__(self, spec=None, **keyvalues):
+    def __init__(self, **keyvalues):
         """
         Spec keyword arguments are stored in the attribute dict (__dict__).
 
         I.e., the initial constructor keywords (and keywords of the optional
         spec 'parent' object') are the only keyword values that will ever be
         expressed by iteration.
-
-        Note: If an eisting spec is supplied by keyword `spec`, then that
-        spec's keyword values are consumed first, followed by the other keyword
-        arguments. The union of those keys becomes the default key set.
         """
-        self.params = AttrDict()
-        self.defaults = AttrDict()
-        self.sliders = {}
-        self.watchers = {}
-        self._klass = self.__class__.__name__
-        self._out = ConsolePrinter(prefix=self._klass)
-        self._debug = lambda *msg: self._out(*msg, debug=True)
+        object.__setattr__(self, '_initialized', False)
+        self._params = AttrDict()
+        self._widgets = {}
+        self._watchers = {}
+        super().__init__()
 
-        def set_item(key, value, source):
-            if is_param(value):
-                self.params[key] = value
-                self.defaults[key] = value.value
-                setattr(self, key, value.value)
-                self._debug(f'add Param key {key!r} from {source}')
-                return
-            if callable(value) and value.__name__ == 'getspec':
-                value = value()
-                self._debug(f'instantiated spec {value!r} from {source}')
-            setattr(self, key, value)
-            self.defaults[key] = value
-            self._debug(f'set key {key!r} to {value!r} from {source}')
-
-        if spec is not None:
-            if callable(spec):
-                spec = spec()
-            for key, value in spec:
-                if key in spec.params:
-                    set_item(key, spec.params[key], spec._klass)
-                    continue
-                set_item(key, value, spec._klass)
+        inheritance = classlist(self.__class__)
+        for cls in inheritance:
+            for name, value in vars(cls).items():
+                if type(value) is Param:
+                    value = copy.copy(value)
+                    value.owner = self
+                    value.attrname = _attrname(name)
+                    self._params[name] = value
+                    self.debug(f'copied Param {name!r} from {cls.__name__}')
 
         for key, value in keyvalues.items():
-            if key == '_spec_type':
-                if self._klass != value:
-                    self._klass = self.__class__.__name__ = value
-                    self._debug(f'updated to serialized name {self._klass!r}')
+            if key == '_spec_class' and value != self.klass:
+                self.out(f'Serialized type name {value!r} does not match',
+                         f'class {self.klass!r}', warning=True)
                 continue
-            if type(value) is dict and '_spec_type' in value:
-                specname = value.pop('_spec_type')
-                value = paramspec(specname, instance=True, **value)
-            set_item(key, value, 'keywords')
 
-        self._speckeys = tuple(self.defaults.keys())
+            if type(value) is Param:
+                value = copy.copy(value)
+                if key in self._params:
+                    value.update(self._params[key])
+                    self.debug('updated Param {key!r} with inherited values')
+            else:
+                value = Param(default=value)
+                self.debug('created new Param {key!r} with default {value!r}')
+            value.owner = self
+            value.attrname = _attrname(key)
+            self._params[key] = value
+
+        for name, p in self._params.items():
+            print(name, p, p.attrname, p.default)
+            object.__setattr__(self, p.attrname, p.default)
+
+        self._initialized = True
 
     def __repr__(self):
+        if not hasattr(self, '_params') or len(self._params) == 0:
+            return self.klass + '()'
         indent = ' '*4
-        r = self.__class__.__name__ + '(\n'
+        r = self.klass + '(\n'
         for k, v in self.items():
-            if k in self.params:
-                v = self.params[k]
+            v = self._params[k]
             lines = f'{k} = {repr(v)},'.split('\n')
             for line in lines:
                 r += indent + line + '\n'
         return r + ')'
 
-    def __contains__(self, key):
-        return key in self._speckeys
+    def __contains__(self, name):
+        return name in self._params
 
-    def __getitem__(self, key):
-        if key not in self:
-            self._out(f'Unknown key: {key!r}', error=True)
-            raise KeyError(f'{key!r}')
-        return getattr(self, key)
+    def __getattr__(self, name):
+        print('__getattr__', name)
+        if not self._initialized or name not in self._params:
+            return object.__getattribute__(self, name)
+        return self[name]
 
-    def __setitem__(self, key, value):
-        if key not in self:
-            self._out(f'Unknown key: {key!r}', warning=True)
+    def __setattr__(self, name, value):
+        print('__setattr__', name, value)
+        if not self._initialized or name not in self._params:
+            return object.__setattr__(self, name, value)
+        self[name] = value
+
+    def __getitem__(self, name):
+        print('__getitem__', name)
+        if name not in self._params:
+            self.out(f'Unknown parameter {name!r}', error=True)
+            raise KeyError(f'{name!r}')
+        return object.__getattribute__(self, self._params[name].attrname)
+
+    def __setitem__(self, name, value):
+        print('__setitem__', name, value)
+        if name not in self:
+            self.out(f'Unknown parameter {name!r}', warning=True)
             return
-        if is_param(value):
-            if key in self.params and self.params[key] == value:
-                return
-            self.params[key] = value
-            setattr(self, key, value.value)
-            self._debug(f'set key {key!r} to Param value {value!r}')
+        if type(value) is Param:
+            value = copy.copy(value)
+            if name in self._params:
+                value.update(self._params[name])
+            else:
+                value.owner = self
+                value.attrname = _attrname(name)
+            self._params[name] = value
+            self.debug('merged Param {name!r} with current values')
             return
-        if callable(value) and getattr(value, '__name__', '_') == 'getspec':
-            value = value()
-        curvalue = getattr(self, key)
+        attrname = self._params[name].attrname
+        curvalue = object.__getattribute__(self, attrname)
         if curvalue != value:
-            setattr(self, key, value)
-            self._debug(f'set key {key!r} to value {value!r}')
-        if key in self.params:
-            if self.params[key].value != value:
-                self.params[key] = Param(*((value,) + self.params[key][1:]))
-                self._debug(f'updated param {key!r} value to {value!r}')
-            if key in self.sliders:
-                slider = self.sliders[key]
-                if slider.value != value:
-                    slider.value = value
-                    slider.param.trigger('value')
-                    self._debug(f'updated slider {key!r} value to {value!r}')
+            start = self._params[name].start
+            end = self._params[name].end
+            if value < start:
+                self.out(f'New {name!r} value {value!r} is below start'
+                         f'parameter {start!r}', warning=True)
+            if value > end:
+                self.out(f'New {name!r} value {value!r} is above end'
+                         f'parameter {end!r}', warning=True)
+            object.__setattr__(self, attrname, value)
+            self.debug(f'set attr {name!r} to value {value!r}')
+        if name in self._widgets:
+            widget = self._widgets[name]
+            if widget.value != value:
+                widget.value = value
+                widget.param.trigger('value')
+                self.debug(f'updated widget {name!r} value to {value!r}')
 
     def __iter__(self):
-        return self.items()
+        return iter(self._params.keys())
 
     def items(self):
-        """
-        Iterate the current spec key-value pairs.
-        """
-        for key, value in self.__dict__.items():
-            if key in self:
-                yield (key, value)
+        for name, p in self._params.items():
+            yield (name, p)
 
-    def keys(self):
+    def defaults(self):
         """
-        Iterate the current spec keys.
+        Iterate over (name, default) tuples for all parameters.
         """
-        for key in self._speckeys:
-            yield key
+        for name, p in self._params.items():
+            yield (name, p.default)
 
-    def update(self, spec=None, **keyvalues):
+    def update(self, **kw):
         """
-        Update this spec with another spec and/or keyword arguments.
+        Update current parameter values.
         """
-        if spec is not None:
-            if callable(spec):
-                spec = spec()
-            for key, value in spec:
-                if key in spec.params:
-                    self[key] = spec.params[key]
-                    continue
-                self[key] = value
-        for key, value in keyvalues.items():
+        for key, value in kw.items():
             self[key] = value
 
     def reset(self):
         """
-        Reset keyword values to default values (from init args or paramspec).
+        Reset keyword values to default values (from parameters).
         """
-        self.update(**self.defaults)
+        self.update(**self.defaults())
 
-    def copy(self):
-        """
-        Return a copy of the spec.
-        """
-        newspec = self.__class__(**self)
-        newspec.params = self.params.copy()
-        newspec.defaults = self.defaults.copy()
-        return newspec
-
-    def panel_sliders(self):
+    def get_widgets(self, *names, exclude=None):
         """
         Return a tuple of Panel FloatSlider objects for Param values.
         """
-        from .state import State
         if 'context' not in State:
-            self._out('Cannot create sliders outside of simulation context',
+            self.out('Cannot create sliders outside of simulation context',
                      error=True)
             return
 
-        if self.sliders:
-            self._debug('found old sliders')
-            return self.sliders
-        if len(self.params) == 0:
-            self._debug('found no params')
+        # Use arguments or gather full list of parameter names with widgets
+        if names:
+            name = list(names)
+        else:
+            names = list([name for name in self._params
+                          if self._params[name].widget is not None])
+
+        # If exclusions specified as list or singleton, remove from list
+        if exclude is not None:
+            if type(exclude) in (list, tuple):
+                for exc in exclude:
+                    if exc in names:
+                        names.remove(exc)
+            elif exclue in names:
+                names.remove(exclude)
+
+        for name in self._widgets.keys():
+            if name in names:
+                del self._widgets[name]
+        if len(self._params) == 0:
+            self.debug('found no params')
             return ()
 
-        # Construct the slider widgets
-        for name, p in self.params.items():
-            self.sliders[name] = pn.widgets.FloatSlider(
-                    name=name,
-                    value=self[name],
-                    start=p.start,
-                    end=p.end,
-                    step=p.step,
-                    callback_policy='mouseup',
-            )
+        # Construct the widgets
+        for name, p in self._params.items():
+            if p.widget == 'FloatSlider':
+                self._widgets[name] = pn.widgets.FloatSlider(
+                        name            = name,
+                        value           = self[name],
+                        start           = p.start,
+                        end             = p.end,
+                        step            = p.step,
+                        callback_policy = 'mouseup',
+                )
+            else:
+                self.out('Widget type {p.widget!r} not currently supported',
+                         warning=True)
 
         # Define an event-based callback function
         def callback(*events):
             State.context.toggle_anybar()
             for event in events:
-                slider = event.obj
-                key = slider.name
-                self[key] = event.new
+                widget = event.obj
+                name = widget.name
+                self[name] = event.new
 
         # Register the callback with each of the sliders
-        for name, slider in self.sliders.items():
-            self.watchers[name] = slider.param.watch(callback, 'value')
+        for name, widget in self._widgets.items():
+            self._watchers[name] = widget.param.watch(callback, 'value')
 
-        self._debug('created {} new sliders', len(self.sliders))
-        return tuple(self.sliders.values())
+        self.debug('created {} new widgets', len(self._widgets))
+        return tuple(self._widgets.values())
 
-    def unlink_sliders(self):
+    def unlink_widgets(self):
         """
         Remove callbacks from Panel FloatSlider objects.
         """
-        for name, slider in self.slider.items():
-            slider.param.unwatch(self.watchers[name])
+        for name, widget in self._widgets.items():
+            widget.param.unwatch(self._watchers[name])
 
     def as_dict(self, subtree=None, T=None):
         """
@@ -278,46 +351,13 @@ class Spec(object):
             T = Tree()
         if subtree is None:
             subtree = self
-        for key, value in subtree.items():
+        for name, value in subtree.items():
+            if isinstance(subtree, Specified):
+                value = subtree[name]
             if hasattr(value, 'items'):
-                self.as_dict(value, T[key])
+                self.as_dict(value, T[name])
                 continue
-            T[key] = value
-        if is_spec(subtree):
-            T['_spec_type'] = self._klass
+            T[name] = value
+        if isinstance(subtree, Specified):
+            T['_spec_class'] = self.klass
         return T
-
-    @classmethod
-    def is_valid(cls, spec, raise_on_fail=True):
-        """
-        Validate the given spec by checking for the right keys.
-        """
-        if not hasattr(spec, 'validate'):
-            log('Not a spec: {}', spec, prefix=cls.__name__, warning=True)
-            if raise_on_fail:
-                raise ValueError('Missing validate method: {}'.format(spec))
-            return False
-
-        return spec.validate()
-
-    def validate(self, raise_on_fail=True):
-        """
-        Validate by checking for the right keys.
-        """
-        valid = True
-        try:
-            for key in self.defaults:
-                if key not in self:
-                    self._out(f'Missing key: {key!r}', warning=True)
-                    valid = False
-            for key in self._speckeys:
-                if key not in self.defaults:
-                    self._out(f'Invalid key: {key!r}', warning=True)
-                    valid = False
-        except Exception as e:
-            self._out('Not a spec', warning=True)
-            valid = False
-
-        if raise_on_fail and not valid:
-            raise ValueError(f'Could not validate spec: {self!r}')
-        return valid
