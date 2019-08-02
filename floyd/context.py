@@ -36,6 +36,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
 
     def __init__(self, *args, **kwargs):
         AbstractBaseContext.__init__(self, *args, **kwargs)
+        self.extra_widgets = []
         State.context = self
 
     def load_parameters(self, step='collect_data', tag=None):
@@ -253,6 +254,12 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         self.set_anybar_color('blue')
         State.recorder.save()
 
+    def add_dashboard_widgets(self, widgets):
+        """
+        Add extra widgets to be displayed between figure and neurons.
+        """
+        self.extra_widgets.append(widgets)
+
     def launch_dashboard(self, return_panel=False, threaded=False,
         dpi=Config.screendpi, pfile=None, **params):
         """
@@ -319,11 +326,11 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         player.param.watch(simulation, 'value')
 
         gain_row = pn.Row(
-            *[pn.Column(f'### {grp.name} conductances', *grp.g.panel_sliders())
+            *[pn.Column(f'### {grp.name} conductances', *grp.g.get_widgets())
                 for grp in State.network.neuron_groups])
 
         neuron_row = pn.Row(
-            *[pn.Column(f'### {grp.name} neurons', *grp.p.panel_sliders())
+            *[pn.Column(f'### {grp.name} neurons', *grp.p.get_widgets())
                 for grp in State.network.neuron_groups])
 
         controls = State.network.get_panel_controls(single_column=True)
@@ -332,6 +339,13 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         if graph_figure is not None:
             last_column = last_column + (graph_figure,)
 
+        control_columns = [pn.Column(gain_row, neuron_row),
+                           pn.Column(*last_column)]
+
+        if self.extra_widgets:
+            extra = pn.Column(*self.extra_widgets)
+            control_columns.insert(0, extra)
+
         panel = pn.Row(
                     pn.WidgetBox(
                         f'## {self.psim.title}',
@@ -339,11 +353,7 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
                         pn.Row(tictoc, player),
                         pn.Row('### Model data', *tuple(table_txt.values())),
                     ),
-                    pn.Column(
-                        gain_row,
-                        neuron_row,
-                    ),
-                    pn.Column(*last_column),
+                    *control_columns,
                 )
 
         if return_panel:
