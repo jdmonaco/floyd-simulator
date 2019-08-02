@@ -65,7 +65,7 @@ class Synapses(RandomMixin, BaseUnitGroup):
     base_variables = ('C', 'S', 't_spike', 'dt_spike', 'g', 'g_peak', 'p_r')
 
     def __init__(self, pre, post, spec, seed=None):
-        SynapsesSpec().is_valid(spec)
+        self.get_spec().is_valid(spec)
 
         name = f'{pre.name}->{post.name}'
         BaseUnitGroup.__init__(self, (post.N, pre.N), name, spec=spec)

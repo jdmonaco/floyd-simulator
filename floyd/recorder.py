@@ -5,12 +5,13 @@ Record state, model variables, and spike/event data across a simulation.
 import numpy as np
 import pandas as pd
 
-from .base import FloydObject
+from tenko.base import TenkoObject
+
 from .state import State, RunMode
 from .config import Config
 
 
-class ModelRecorder(FloydObject):
+class ModelRecorder(TenkoObject):
 
     """
     Automatic recording of state, model variables, and spike/event timing.
@@ -44,7 +45,7 @@ class ModelRecorder(FloydObject):
         saved to the context datafile in the `save_recordings` method.
         """
         assert State.dt_rec >= State.dt, 'recording interval < simulation dt'
-        FloydObject.__init__(self)
+        super().__init__(self)
 
         # Simulation time & progress tracking
         State.ts = np.arange(0, State.duration + State.dt, State.dt)

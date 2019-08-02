@@ -10,7 +10,6 @@ in memoriam.
 __version__ = "0.1.0"
 
 
-from .base     import FloydObject
 from .state    import State
 from .config   import Config
 from .network  import Network

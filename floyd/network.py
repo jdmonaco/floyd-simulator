@@ -8,18 +8,19 @@ import functools
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from .base import FloydObject
+from tenko.base import TenkoObject
+
 from .state import State, RunMode
 
 
-class Network(FloydObject):
+class Network(TenkoObject):
 
     """
     Container for neuron groups, synapses, and other simulation elements.
     """
 
     def __init__(self):
-        FloydObject.__init__(self)
+        super().__init__()
 
         self.neuron_groups = []
         self._neuron_dict = {}
@@ -27,6 +28,7 @@ class Network(FloydObject):
         self._synapses_dict = {}
         self.stimulators = []
         self._stimulators_dict = {}
+        self.state_updaters = []
         self.buttons = {}
         self.watchers = {}
         self.G = nx.DiGraph()
@@ -185,6 +187,8 @@ class Network(FloydObject):
         if not State.recorder:
             return
 
+        for updater in self.state_updaters:
+            updater.updater()
         for stimulator in self.stimulators:
             stimulator.update()
         for group in self.neuron_groups:
@@ -243,6 +247,12 @@ class Network(FloydObject):
         self._stimulators_dict[stim.name] = stim
         self.G.add_edge(stim.name, stim.target.name, object=stim)
         self.debug(f'added stimulator: {stim!s}')
+
+    def add_state_updater(self, updater):
+        """
+        Add an object that updates the shared state.
+        """
+        self.state_updaters.append(updater)
 
     def display_neural_connectivity(self):
         """

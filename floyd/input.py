@@ -5,8 +5,8 @@ Functions to generate simulation inputs.
 from collections import namedtuple
 
 from toolbox.numpy import *
+from tenko.base import TenkoObject
 
-from .base import FloydObject
 from .spec import is_spec
 from .state import State
 
@@ -33,7 +33,7 @@ def triangle_wave(t0, p):
     return 0.5 + (1/a) * (t - a*b) * (-1)**b
 
 
-class InputStimulator(FloydObject):
+class InputStimulator(TenkoObject):
 
     """
     Generate one-off or repeating temporal input stimulus patterns.
@@ -47,8 +47,7 @@ class InputStimulator(FloydObject):
         Note: Target should be a BaseUnitGroup subclass. The variable should be
         the name of an array variable or a spec parameter in 'target.p'.
         """
-        self.name = f'Stim:{variable}'
-        FloydObject.__init__(self, self.name)
+        super().__init__(name=f'Stim:{variable}')
         self.target = target
         self.variable = variable
         self.state_key = state_key

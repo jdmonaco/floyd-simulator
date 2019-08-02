@@ -10,9 +10,10 @@ from matplotlib.gridspec import GridSpec
 
 from roto.dicts import merge_two_dicts
 from roto.null import Null
+from tenko.base import TenkoObject
+
 
 from .traces import RealtimeTracesPlot
-from .base import FloydObject
 from .state import State, RunMode
 
 
@@ -25,7 +26,7 @@ def block_record_mode(func):
     return wrapper
 
 
-class SimulationPlotter(FloydObject):
+class SimulationPlotter(TenkoObject):
 
     """
     Manage axes, plots, data traces, and labels for interactive visualization.
@@ -36,7 +37,7 @@ class SimulationPlotter(FloydObject):
         After construction, use `gs` to create subplot specs to pass to the
         `set_axes()` method.
         """
-        FloydObject.__init__(self)
+        super().__init__()
         self.nrows = nrows
         self.ncols = ncols
         self.figsize = (State.figw, State.figh)

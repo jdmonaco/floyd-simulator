@@ -9,19 +9,20 @@ import matplotlib.patheffects as path_effects
 
 from toolbox.numpy import *
 
-from .base import FloydObject
+from tenko.base import TenkoObject
+
 from .config import Config
 from .state import State
 
 
-class NetworkGraph(FloydObject):
+class NetworkGraph(TenkoObject):
 
     """
     Create and update a graph plot of the network structure
     """
 
     def __init__(self):
-        FloydObject.__init__(self)
+        super().__init__()
         if 'network' in State:
             self.G = State.network.G
         else:
@@ -34,7 +35,7 @@ class NetworkGraph(FloydObject):
         self.N = len(self.G)
         self.N_groups = len(State.network.neuron_groups)
         self.pos = None
-        self.nodes = None
+        self.nodes = []
         self.labels = []
         self.arrows = None
         self.artists = []
@@ -113,11 +114,12 @@ class NetworkGraph(FloydObject):
 
         # Draw the edges.
         # List of matplotlib.patches.FancyArrowPatch
-        self.arrows = nx.draw_networkx_edges(self.G, pos, ax=self.ax,
-                alpha=alpha, arrowstyle='-|>', arrowsize=36, arrows=True,
-                connectionstyle='angle3')
-        for arrow in self.arrows:
-            arrow.set_zorder(0)
+        if self.G.edges:
+            self.arrows = nx.draw_networkx_edges(self.G, pos, ax=self.ax,
+                    alpha=alpha, arrowstyle='-|>', arrowsize=36, arrows=True,
+                    connectionstyle='angle3')
+            for arrow in self.arrows:
+                arrow.set_zorder(0)
 
         # Give stimulators fancy arrows and inhibitory synapses bracket arrows.
         # Set linewidths to Z-score of total connection strength.

@@ -8,11 +8,12 @@ from collections import deque
 import numpy as np
 from numpy import cumsum, inf
 
-from .base import FloydObject
+from tenko.base import TenkoObject
+
 from .state import State, RunMode
 
 
-class RealtimeTracesPlot(FloydObject):
+class RealtimeTracesPlot(TenkoObject):
 
     """
     A collection of real-time windowed trace plots with adaptive axes limits.
@@ -61,7 +62,7 @@ class RealtimeTracesPlot(FloydObject):
         legend_format : dict, optional
             Legend formatting arguments can be provided
         """
-        FloydObject.__init__(self)
+        super().__init__()
         self.ax = {}
         self.axtraces = []
         self.fmt = {}

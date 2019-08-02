@@ -6,12 +6,12 @@ from functools import reduce
 import operator as op
 
 from toolbox.numpy import *
+from tenko.base import TenkoObject
 
-from .base import FloydObject
 from .spec import is_spec
 
 
-class BaseUnitGroup(FloydObject):
+class BaseUnitGroup(TenkoObject):
 
     base_variables = ()
     extra_variables = ()
@@ -39,7 +39,7 @@ class BaseUnitGroup(FloydObject):
         dtype : '?' | 'u' | 'i' | 'f' | 'd', optional (default 'f')
             Default numpy dtype to use for initializing array variables
         """
-        FloydObject.__init__(self, name=name)
+        super().__init__(name=name)
         self.name = name
         self.shape = N_or_shape
         if np.iterable(self.shape):
