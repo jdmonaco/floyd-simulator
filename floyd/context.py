@@ -21,21 +21,23 @@ from roto.dicts import merge_two_dicts
 from maps.geometry import EnvironmentGeometry
 from pouty.console import snow as hilite
 from pouty import debug_mode
+from specify import Specified, Param
 
-from .spec import paramspec
 from .network import Network
 from .state import State, RunMode, reset_state
 from .config import Config
 
 
-class SimulatorContext(RandomMixin, AbstractBaseContext):
+class SimulatorContext(RandomMixin, AbstractBaseContext, Specified):
 
     """
     Context base class for simulations.
     """
 
-    def __init__(self, *args, **kwargs):
-        AbstractBaseContext.__init__(self, *args, **kwargs)
+    def __init__(self, **kwargs):
+        tenkw = AbstractBaseContext.pop_tenko_args(kwargs)
+        super(AbstractBaseContext, self).__init__(**tenkw)
+        super(Specified, self).__init__(**kwargs)
         self.extra_widgets = []
         State.context = self
 
@@ -254,11 +256,11 @@ class SimulatorContext(RandomMixin, AbstractBaseContext):
         self.set_anybar_color('blue')
         State.recorder.save()
 
-    def add_dashboard_widgets(self, widgets):
+    def add_dashboard_widgets(self, *widgets):
         """
         Add extra widgets to be displayed between figure and neurons.
         """
-        self.extra_widgets.append(widgets)
+        self.extra_widgets.extend(widgets)
 
     def launch_dashboard(self, return_panel=False, threaded=False,
         dpi=Config.screendpi, pfile=None, **params):
