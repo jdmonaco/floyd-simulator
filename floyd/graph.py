@@ -2,6 +2,9 @@
 Network graph figure.
 """
 
+__all__ = ['NetworkGraph', ]
+
+
 import networkx as nx
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -42,9 +45,6 @@ class NetworkGraph(TenkoObject):
         self.colors = ones((self.N, 4))
 
         State.netgraph = self
-
-    def __str__(self):
-        return f'{self.klass}(N={self.N})'
 
     def closefig(self):
         """

@@ -117,11 +117,7 @@ class Network(TenkoObject):
         def defaults(value):
             State.context.toggle_anybar()
             self.debug('defaults button callback')
-            for grp in self.neuron_groups:
-                for which in 'gp':
-                    spec = getattr(grp, which)
-                    for name, slider in spec.sliders.items():
-                        slider.value = spec.defaults[name]
+            self.reset_neurons()
 
         @throttle
         def zero(value):
@@ -204,9 +200,9 @@ class Network(TenkoObject):
         if State.run_mode == RunMode.INTERACT:
             State.tablemaker.update()
 
-    def reset(self):
+    def reset_neurons(self):
         """
-        Reset neuron group parameters to spec defaults.
+        Reset neuron group parameters to parameter defaults.
         """
         for grp in self.neuron_groups:
             grp.reset()

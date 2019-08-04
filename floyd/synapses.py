@@ -2,94 +2,72 @@
 Groups of synaptic connections between a pair of neuron groups.
 """
 
+__all__ = ['Synapses', ]
+
+
 from toolbox.numpy import *
-from tenko.mixins import RandomMixin
+from specify import Specified, Param
 
 from .matrix import pairwise_distances as distances
 from .groups import BaseUnitGroup
 from .delay import DelayLines
-from .spec import paramspec
 from .state import State
 
 
-def scale_constant(p):
-    """
-    Return the conductance normalizing constant (s) given rise and decay.
-    """
-    delta = arange(0, p.tau_max + State.dt, State.dt)
-    g_t = exp(-delta/p.tau_d) - exp(-delta/p.tau_r)
-    return 1 / g_t.max()
+class Synapses(BaseUnitGroup, Specified):
 
-def postsynaptic_potential(p, g_peak, C_m, E_syn, E_L):
-    """
-    Postsynaptic potential at rest for membrane and conductance parameters.
-    """
-    delta = arange(0, p.tau_max + State.dt, State.dt)
-    g_t = exp(-delta/p.tau_d) - exp(-delta/p.tau_r)
-    s = 1 / g_t.max()
-    dV = g_peak * s * trapz(g_t, dx=State.dt) * (E_syn - E_L) / C_m
-    return dV
-
-def g_peak_from_psp(PSP_mV, p, g_peak, C_m, E_syn, E_L):
-    """
-    Calculate the maximal conductance that achieves the given postsynaptic
-    potential at rest.
-    """
-    p = p.copy()
-    p.update(g_max=1.0)
-    dV = postsynaptic_potential(p, g_peak, C_m, E_syn, E_L)
-    return PSP_mV / dV
-
-
-class Synapses(RandomMixin, BaseUnitGroup):
-
-    @classmethod
-    def get_spec(cls, return_factory=False, **keyvalues):
-        """
-        Return a Spec default factory function or instance with updated values.
-        """
-        if not hasattr(cls, '_Spec'):
-            cls._Spec = paramspec(f'{cls.__name__}Spec',
-                transmitter = 'glutamate',
-                g_max       = 1.0,
-                tau_r       = 0.5,
-                tau_d       = 2.0,
-                tau_l       = 1.0,
-                tau_max     = 25.0,
-                failures    = False,
-            )
-        if return_factory:
-            return cls._Spec
-        return cls._Spec(**keyvalues)
+    transmitter = Param(default='glutamate', doc="'GABA' | 'glutamate'")
+    g_max       = Param(default=1.0, units="nS")
+    tau_r       = Param(default=0.5, units="ms")
+    tau_d       = Param(default=2.0, units="ms")
+    tau_l       = Param(default=1.0, units="ms")
+    tau_max     = Param(default=25.0, units="ms")
+    failures    = Param(default=False, doc="enable synaptic failures")
 
     base_variables = ('C', 'S', 't_spike', 'dt_spike', 'g', 'g_peak', 'p_r')
 
-    def __init__(self, pre, post, spec, seed=None):
-        self.get_spec().is_valid(spec)
-
+    def __init__(self, pre, post, seed=None, **specs):
         name = f'{pre.name}->{post.name}'
-        BaseUnitGroup.__init__(self, (post.N, pre.N), name, spec=spec)
+        super(BaseUnitGroup, self).__init__((post.N, pre.N), name)
+        super(Specified, self).__init__(**specs)
 
-        self.E_syn = post.E_syn[self.p.transmitter]
-        self.s = scale_constant(self.p)
+        self.E_syn = post.E_syn[self.transmitter]
+        self.s = scale_constant(self)
         self.pre = pre
         self.post = post
         self.recurrent = pre is post
         self.set_random_seed(seed)
 
         self.delay = None
-        self.g_peak = self.p.g_max
+        self.g_peak = self.g_max
         self.t_spike = -inf
         self.dt_spike = -inf
         self.g_total = zeros(post.N, 'f')
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
-        self.out('{} = {:.4g} mV', self.name,
-                postsynaptic_potential(self.p, self.p.g_max, post.p.C_m,
-                    self.E_syn, post.p.E_L),
+        self.out('{} = {:.4g} mV', self.name, self.postsynaptic_potential(),
                 prefix='PostSynPotential')
 
         State.network.add_synapses(self)
+
+    def scale_constant(self):
+        """
+        Return the conductance normalizing constant (s) given rise and decay.
+        """
+        delta = arange(0, self.tau_max + State.dt, State.dt)
+        g_t = exp(-delta/self.tau_d) - exp(-delta/self.tau_r)
+        return 1 / g_t.max()
+
+    def postsynaptic_potential(self):
+        """
+        Postsynaptic potential at rest for membrane and conductance parameters.
+        """
+        delta = arange(0, self.tau_max + State.dt, State.dt)
+        g_t = exp(-delta/self.tau_d) - exp(-delta/self.tau_r)
+        s = 1 / g_t.max()
+        dV = self.g_max * s * trapz(g_t, dx=State.dt) * (
+                                self.E_syn - self.post.E_L) / self.post.C_m
+        return dV
 
     def connectivity_stats(self):
         """
@@ -133,7 +111,7 @@ class Synapses(RandomMixin, BaseUnitGroup):
             syn_spikes = self.delay.get()
 
         # If release probability is defined, randomly choose successful spikes
-        if self.p.failures:
+        if self.failures:
             syn_spikes &= self.rnd.random_sample(self.N) < self.p_r_j
 
         # Set spike times and update dts from most recent spike
@@ -141,8 +119,8 @@ class Synapses(RandomMixin, BaseUnitGroup):
         self.dt_spike[self.ij] = dt = State.t - self.t_spike[self.ij]
 
         # Find actively evolving conductance time-courses
-        active = (dt >= self.p.tau_l) & (dt <= self.p.tau_max)
-        delta = dt[active] - self.p.tau_l
+        active = (dt >= self.tau_l) & (dt <= self.tau_max)
+        delta = dt[active] - self.tau_l
 
         # Conductance matrix indexes for setting values
         inactive = invert(active)
@@ -152,7 +130,7 @@ class Synapses(RandomMixin, BaseUnitGroup):
         # Bi-exponential time-course of postsynaptic conductances
         self.g[ij_inactive] = 0.0
         g_t = self.g_peak[ij_active]*self.S[ij_active]*self.s*(
-                    exp(-delta/self.p.tau_d) - exp(-delta/self.p.tau_r))
+                    exp(-delta/self.tau_d) - exp(-delta/self.tau_r))
         self.g[ij_active] += g_t  # allow paired-pulse facilitation
 
         # Total conductances for connected postsynaptic neurons
@@ -195,7 +173,7 @@ class Synapses(RandomMixin, BaseUnitGroup):
         self.convergence = {n:self.j[self.i == n] for n in self.active_post}
         self.divergence = {n:self.i[self.j == n] for n in self.active_pre}
 
-        if self.p.failures:
+        if self.failures:
             self.p_r_j = self.p_r[self.ij]
 
     def _kernel_connect(self, C, kernel, fanout, multapses):

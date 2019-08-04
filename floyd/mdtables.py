@@ -2,6 +2,10 @@
 Markdown tables of neuron group statistics.
 """
 
+__all__ = ['MarkdownTable', 'TableMaker', ]
+
+
+from tenko.base import TenkoObject
 from .state import State
 
 
@@ -54,13 +58,14 @@ class MarkdownTable(object):
         self.table = self.spec.format(**data)
 
 
-class TableMaker(object):
+class TableMaker(TenkoObject):
 
     """
     Auto-updating tables formatted by MarkdownTable objects.
     """
 
     def __init__(self):
+        super().__init__()
         self.tables = {}
         State.tablemaker = self
 
@@ -74,6 +79,7 @@ class TableMaker(object):
         Register a MarkdownTable object for updating.
         """
         self.tables[table.label] = table
+        self.out(f'{table.title}: {table.columns!r}', prefix='RegisteredTable')
 
     def update(self):
         """
@@ -97,4 +103,4 @@ class TableMaker(object):
         key = label.lower()
         if key in self.tables:
             return self.tables[key].table
-        State.context.out(label, prefix='UnknownTable', warning=True)
+        self.out(label, prefix='UnknownTable', warning=True)

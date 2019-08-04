@@ -2,7 +2,7 @@
 Global state for simulations.
 """
 
-__all__ = ['State', 'reset_state', 'RunMode']
+__all__ = ['State', 'RunMode']
 
 
 from enum import Enum
@@ -11,18 +11,19 @@ from roto.dicts import AttrDict
 
 
 class RunMode(Enum):
-    ANIMATE  = 'for creating movies'
-    INTERACT = 'for interactive dashboards'
-    RECORD   = 'for collecting data'
+    ANIMATE  = 'create movies'
+    INTERACT = 'launch dashboards'
+    RECORD   = 'collect data'
 
 
-def reset_state():
-    keys = list(State.keys())
-    for key in keys:
-        State[key] = None
+
+class SharedState(AttrDict):
+    def reset():
+        for key in self.keys():
+            self[key] = None
 
 
-State = AttrDict()
+State = SharedState()
 
 
 #

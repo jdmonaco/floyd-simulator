@@ -2,16 +2,18 @@
 Simulation plotting for interactive dashboards or batched movie creation.
 """
 
+__all__ = ['SimulationPlotter', ]
+
+
 import functools
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
+from tenko.base import TenkoObject
 from roto.dicts import merge_two_dicts
 from roto.null import Null
-from tenko.base import TenkoObject
-
 
 from .traces import RealtimeTracesPlot
 from .state import State, RunMode

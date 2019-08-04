@@ -2,12 +2,15 @@
 Functions to generate simulation inputs.
 """
 
+__all__ = ['step_pulse_series', 'triangle_wave', 'InputStimulator', ]
+
+
 from collections import namedtuple
 
 from toolbox.numpy import *
 from tenko.base import TenkoObject
+from specify import is_specified
 
-from .spec import is_spec
 from .state import State
 
 
@@ -45,29 +48,27 @@ class InputStimulator(TenkoObject):
         Target object parameter is manipulated according to Timepoint tuples.
 
         Note: Target should be a BaseUnitGroup subclass. The variable should be
-        the name of an array variable or a spec parameter in 'target.p'.
+        the name of an array variable or a Param in `target.spec`.
         """
-        super().__init__(name=f'Stim:{variable}')
+        super(TenkoObject, self).__init__(name=f'Stim:{variable}')
         self.target = target
         self.variable = variable
         self.state_key = state_key
+        self.is_array_variable = False
 
-        self.is_array = False
-        self.is_target_spec = False
-
-        if hasattr(target, variable):
+        if hasattr(target, 'variables') and variable in target.variables:
             assert isinstance(getattr(target, variable), ndarray), \
                     'object-level attributes must be arrays'
-            self.is_array = True
-        elif hasattr(target, 'p') and variable in target.p:
-            self.is_target_spec = True
+            self.is_array_variable = True
+        elif is_specified(target) and variable in target:
+            pass
         else:
-            raise ValueError('not an attribute array or spec parameter '
+            raise ValueError('not an attribute array or Param key: '
                              f'{variable!r}')
 
         # Process `stimulate` as an index for array target variables
         self.index = None
-        if self.is_array:
+        if self.is_array_variable:
             if stimulate is None:
                 self.index = slice(None)
             else:
@@ -137,10 +138,8 @@ class InputStimulator(TenkoObject):
         value = tp.value
         if callable(value):
             value = value(dt)
-        if self.is_array:
+        if self.is_array_variable:
             getattr(self.target, self.variable)[self.index] = value
-        elif self.is_target_spec:
-            self.target.p[self.variable] = value
         else:
             setattr(self.target, self.variable, value)
         if self.state_key is not None:

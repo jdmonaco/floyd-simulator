@@ -2,6 +2,9 @@
 Delay lines for signal propagation.
 """
 
+__all__ = ['DelayLines', ]
+
+
 from numpy import broadcast_to, zeros, arange, array
 
 from pouty import log

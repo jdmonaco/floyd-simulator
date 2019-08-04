@@ -47,8 +47,8 @@ class InputOutputCurves(FloydContext):
             g_tonic_inh = 0.0,
         )
 
-        # Create the hexagonal disc layout spec for the group
-        layout = HexagonalDiscLayout.get_spec(
+        # Create the hexagonal disc layout for the group
+        layout = HexagonalDiscLayout(
             scale       = CA_spacing,
             radius      = CA_radius,
             origin      = (CA_radius,)*2,

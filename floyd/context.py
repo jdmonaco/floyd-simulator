@@ -9,165 +9,188 @@ except ImportError:
 
 import os
 import time
+from decorator import decorator
 
 from matplotlib.animation import FuncAnimation
-from panel.widgets import Toggle
 from panel.pane import Matplotlib, Markdown
 import panel as pn
 
+from specify import Specified, Param
 from tenko.context import AbstractBaseContext, step
-from tenko.mixins import RandomMixin
-from roto.dicts import merge_two_dicts
 from maps.geometry import EnvironmentGeometry
+from roto.dicts import merge_two_dicts
+from roto.strings import sluggify
 from pouty.console import snow as hilite
 from pouty import debug_mode
-from specify import Specified, Param
 
 from .network import Network
-from .state import State, RunMode, reset_state
+from .state import State, RunMode
 from .config import Config
 
 
-class SimulatorContext(RandomMixin, AbstractBaseContext, Specified):
+SPECFILE = 'specs.json'
+DFLTFILE = 'defaults.json'
+
+
+@decorator
+def simulate(_f_, *args, **kwargs):
+    """
+    Declare a method as a simulation in this context.
+    """
+    self = args[0]
+    status = { 'OK': False }
+    self._step_enter(_f_, args, kwargs)
+    self._prepare_simulation(args, kwargs)
+    res = self._step_execute(_f_, args, kwargs, status)
+    self._step_exit(_f_, args, kwargs, status)
+
+    return res
+
+
+class SimulatorContext(AbstractBaseContext, Specified):
 
     """
     Context base class for simulations.
     """
 
+    title      = Param(default=Config.title, doc="string, simulation title")
+    tag        = Param(default=Config.tag, doc="string or None, simulation label")
+    rnd_seed   = Param(default=Config.rnd_seed, doc="string, random numbers seed key")
+    duration   = Param(default=Config.duration, doc="ms, simulation duration")
+    dt         = Param(default=Config.dt, doc="ms, simulation timestep")
+    dt_rec     = Param(default=Config.dt_rec, doc="ms, recording interval")
+    dt_block   = Param(default=Config.dt_block, doc="ms, block interval")
+    blocksize  = Param(default=int(Config.dt_block / Config.dt), doc="int, timesteps per block")
+    figw       = Param(default=Config.figw, doc="inches, main figure width")
+    figh       = Param(default=Config.figh, doc="inches, main figure height")
+    figdpi     = Param(default=Config.figdpi, doc="dots/inch, figure resolution")
+    tracewin   = Param(default=Config.tracewin, doc="ms, length of trace plot window")
+    calcwin    = Param(default=Config.calcwin, doc="ms, length of rolling calculation window")
+    run_mode   = Param(default=Config.run_mode, doc="'animate'|'interact'|'record', simulation type")
+    show_debug = Param(default=Config.show_debug, doc="boolean, whether to show debug statements")
+
     def __init__(self, **kwargs):
+        """
+        Separate keyword arguments into tenko.AbstractBaseContext arguments and
+        specify.Specified parameter values. The constructor performs most of
+        the preparatory steps for a simulation except for instantiating the
+        main network object; this mean that the constructor processes keyword
+        arguments as parameter just subsequent calls to one of the simulation
+        methods (decorated with @simulate). A benefit of this is that JSON
+        files with default and specified parameter values are written out to
+        the directory tree (which is created if necessary. These files can be
+        examined and modified before making a call to a simulation method.
+
+        Subclasses must override the `setup_model()` method, which should be
+        considered to be the 'kernel' of the model called by the simulation
+        methods (i.e., `create_movie()`, `collect_data()`, and
+        `launch_dashboard()`). Model components from floyd packages and modules
+        should be instantiated and configured within the `setup_model()`
+        implementation.
+        """
         tenkw = AbstractBaseContext.pop_tenko_args(kwargs)
         super(AbstractBaseContext, self).__init__(**tenkw)
         super(Specified, self).__init__(**kwargs)
-        self.extra_widgets = []
-        State.context = self
+        self._extra_widgets = []
+        self._specfile_init = kwargs.get('specfile')
+        self._prepare_simulation(None, kwargs, finish_setup=False)
 
-    def load_parameters(self, step='collect_data', tag=None):
+    def __str__(self):
+        return super(Specified, self).__str__()
+
+    def printspec(self):
+        self.out(str(self), hideprefix=True)
+
+    def _prepare_simulation(self, args, kwargs, finish_setup=True):
         """
-        Load simulation and/or model parameter specs from a context path.
+        Implicit method that prepares for an imminent simulation.
         """
-        path = step
-        if tag is not None:
-            path += f'+{tag}'
-        for p, specname, base in [('psim', 'SimSpec', 'simulation'),
-                                  ('p', 'ModelSpec', 'model')]:
-            fn = f'{base}.json'
-            stem = os.path.join(self._ctxdir, path, fn)
-            try:
-                p_json = self.read_json(stem)
-            except Exception as e:
-                self.out(stem, prefix='MissingJSONFile', warning=True)
-            else:
-                # Manually de-serialize the run_mode key
-                if 'run_mode' in p_json:
-                    modename = p_json['run_mode'].upper()
-                    p_json['run_mode'] = RunMode[modename]
-                setattr(self, p, paramspec(specname, instance=True, **p_json))
-                self.out(stem, prefix=f'{base.title()}Parameters')
+        debug_mode(self.show_debug)
+        step = self._lastcall['step']
+        tag = self._lastcall['tag']
+        rundir = os.path.join(self._ctxdir, step)
+        if tag: prev_rundir += '+{}'.format(sluggify(tag))
 
-    def set_simulation_parameters(self, modparams=None, **simparams):
-        """
-        Set simulation parameters in global scope and shared state.
-        """
-        # Start off with the correct (or default) debug mode
-        _debug = simparams.get('debug', Config.debug)
-        if modparams is not None:
-            debug_mode(modparams.get('debug', _debug))
+        # Load a previous specfile from the anticipated rundir path
+        spath = os.path.join(rundir, SPECFILE)
+        try:
+            sfdata = self.read_json(spath)
+        except Exception as e:
+            self.debug(spath, prefix='rundir specs ({SPECFILE!r}) not found')
+        else:
+            # De-serialize the run_mode key
+            if 'run_mode' in sfdata:
+                modename = sfdata['run_mode'].upper()
+                sfdata['run_mode'] = RunMode[modename]
+            self.update(**sfdata)
+            self.out(spath, prefix=f'LoadedSpecFile')
+        finally:
+            debug_mode(self.show_debug)
 
-        # Set the configured defaults to a paramspec attribute
-        self.psim = paramspec('SimSpec', instance=True,
-                title     = Config.title,
-                rnd_seed  = Config.rnd_seed,
-                duration  = Config.duration,
-                dt        = Config.dt,
-                dt_rec    = Config.dt_rec,
-                dt_block  = Config.dt_block,
-                blocksize = int(Config.dt_block / Config.dt),
-                figw      = Config.figw,
-                figh      = Config.figh,
-                figdpi    = Config.figdpi,
-                tracewin  = Config.tracewin,
-                calcwin   = Config.calcwin,
-                run_mode  = Config.run_mode,
-                debug     = Config.debug,
-        )
+        # Update from an alternative specfile if one was ... provided
+        specfile = kwargs.pop('specfile', self._specfile_init)
+        if specfile:
+            fpath, fspecs = self.get_json(specfile)
+            self.update(**fspec)
+            self.out(fpath, prefix='LoadedSpecFile')
 
-        # Add derived values (e.g., blocksize) to the simulation parameters
-        simparams.update(blocksize=int(simparams.get('dt_block',
-                Config.dt_block) / simparams.get('dt', Config.dt)))
-        for p in (simparams, modparams):
-            if p is None:
-                continue
-            if 'run_mode' in p and type(p['run_mode']) is str:
-                modename = p['run_mode'].upper()
-                p['run_mode'] = RunMode[modename]
+        # Update Param values with keyword arguments from the call
+        self.update(**kwargs)
+        if kwargs:
+            self.out(repr(list(kwargs.keys())), prefix='LoadedKeywords')
+        debug_mode(self.show_debug)
 
-        # Update from model parameters and log differences with defaults
+        # Derived (e.g., blocksize) and de-serialized (e.g., run_mode) values
+        self.blocksize = int(self.dt_block / self.dt)
+        if type(self.run_mode) is str:
+            modename = self.run_mode.upper()
+            self.run_mode = RunMode[modename]
+
+        # Print out the resulting spec parameters
         self.out(f'Simulation parameters:')
-        self.psim.update(**simparams)
-        for name, value in self.psim:
-            logmsg = f'- {name} = {value!r}'.format(name, value)
-            if modparams is not None and name in modparams:
-                pval = modparams.pop(name)
-                if pval != self.psim[name]:
-                    logmsg = hilite(
-                        f'* {name} = {pval!r} [default: {self.psim[name]!r}]')
-                    self.psim[name] = pval
-            self.out(logmsg, hideprefix=True)
+        self.printspec()
 
         # Update global scope and shared state
-        self.get_global_scope().update(self.psim)
-        reset_state()
-        State.update(self.psim)
-        State.context = self
+        specdict = dict(self.values())
+        State.reset()
+        State.update(specdict)
+        self.get_global_scope().update(**specdict)
+
+        # Set the RNG seed if a seed key was provided
+        if 'rnd_seed' in self and self.rnd_seed:
+            self.set_default_random_seed(rnd_seed)
 
         # Manually serialize the run_mode key and then write a JSON file
-        psim_dict = self.psim.as_dict()
-        psim_dict.update(run_mode=psim_dict['run_mode'].name.lower())
-        self.write_json(psim_dict, 'simulation')
+        if isinstance(specdict['run_mode'], RunMode):
+            specdict.update(run_mode=specdict['run_mode'].name.lower())
+        self.write_json(specdict, SPECFILE)
 
-        # Initialize the 'magic' network object
-        State.network = Network()
+        # Similarly, write the defaults to a JSON file
+        dfltdict = dict(self.defaults())
+        if isinstance(dfltdict['run_mode'], RunMode):
+            dfltdict.update(run_mode=dfltdict['run_mode'].name.lower())
+        self.write_json(dfltdict, DFLTFILE, base='context')
 
-        # Display a green AnyBar dot to signal the simulation is running
+        # We want to process parameter updates and write out defaults and
+        # specs files during both construction (__init__) and method calls to
+        # begin simulations (@simulate decorated methods). However, we do not
+        # want the constructor to create the network, etc.
+
+        if not finish_setup:
+            return
+
+        # Display green AnyBar to signal the start of the simulation
         self.set_anybar_color('green')
-        self.debug(f'State = {State!r}')
+        self.debug(f'State = {State}')
 
-    def set_model_parameters(self, params=None, pfile=None, **defaults):
-        """
-        Set model parameters according to file, keywords, or defaults.
-
-        Note: It is required to specify default values for all parameters here.
-        """
-        # Set the defaults to a paramspec attribute and write to file
-        self.p = paramspec('ModelSpec', instance=True, **defaults)
-        self.write_json(self.p.as_dict(), 'defaults', base='context')
-
-        # Import values from parameters file if specified
-        if params is None:
-            params = {}
-        if pfile is not None:
-            fpath, fparams = self.get_json(pfile)
-            params = merge_two_dicts(fparams, params)
-            self.out(fpath, prefix='ParameterFile')
-
-        # Write file with effective parameters (i.e., kwargs > file > defaults)
-        self.p.update(**params)
-        self.write_json(self.p.as_dict(), 'model')
-
-        # Set parameters as global variables in the object's module scope
-        self.out('Model parameters:')
-        self.get_global_scope().update(self.p)
-        for name, value in self.p:
-            dflt = self.p.defaults[name]
-            if value != dflt:
-                logstr = hilite(f'* {name} = {value!r} [default: {dflt!r}]')
-            else:
-                logstr = f'- {name} = {value!r}'
-            self.out(logstr, hideprefix=True)
+        # Initialize the simulation network object and store an instance
+        # attribute reference (n.b., it goes into shared state anyway)
+        State.context = self
+        self.network = Network()
 
     def load_environment_parameters(self, env):
         """
-        Import environment geometry into the module and object scope.
+        Import environment geometry into the global scope.
         """
         from numpy import ndarray
         modscope = self.get_global_scope()
@@ -185,41 +208,22 @@ class SimulatorContext(RandomMixin, AbstractBaseContext, Specified):
             self.out('- {} ({})', k, 'x'.join(list(map(str, getattr(E,
                 k).shape))), prefix='Geometry', hideprefix=True)
 
-    def setup_model(self, pfile=None, **params):
+    def setup_model(self):
         """
-        Model construction: This must be overridden by subclasses.
+        Model construction: This method must be overridden by subclasses to
+        define the model that will be simulated.
         """
-        self.set_simulation_parameters(params,
-                title    = Config.title,    # str, full simulation title
-                rnd_seed = Config.rnd_seed, # str, RNG seed (None: class name)
-                duration = Config.duration, # ms, total simulation length
-                dt       = Config.dt,       # ms, single-update timestep
-                dt_rec   = Config.dt_rec,   # ms, recording sample timestep
-                dt_block = Config.dt_block, # ms, dashboard update timestep
-                figw     = Config.figw,     # inches, main figure width
-                figh     = Config.figh,     # inches, main figure height
-                figdpi   = Config.figdpi,   # dots/inch, figure resolution
-                tracewin = Config.tracewin, # ms, trace plot window
-                calcwin  = Config.calcwin,  # ms, rolling calculation window
-                run_mode = Config.run_mode, # set the run mode
-                debug    = Config.debug,    # run in debug mode
-        )
-        self.set_model_parameters(params, pfile=pfile,
-                param1 = 1.0, # this is a model parameter default
-                param2 = 1.0, # this is another model parameter default
-        )
-        self.set_default_random_seed(rnd_seed)
         raise NotImplementedError('models must implement setup_model()')
 
-    @step
-    def create_movie(self, tag=None, pfile=None, dpi=Config.moviedpi,
-        fps=Config.fps, **params):
+    @simulate
+    def create_movie(self, specfile=None, dpi=Config.moviedpi, fps=Config.fps,
+        **specs):
         """
         Simulate the model in batch mode for movie generation.
         """
         # Run the simulation in the animation run mode
-        params.update(run_mode=RunMode.ANIMATE)
-        self.setup_model(pfile=pfile, **params)
+        spec.update(run_mode=RunMode.ANIMATE)
+        self.setup_model()
 
         anim = FuncAnimation(
                 fig       = State.simplot.fig,
@@ -239,14 +243,14 @@ class SimulatorContext(RandomMixin, AbstractBaseContext, Specified):
         self.hline()
         self.play_movie()
 
-    @step
-    def collect_data(self, tag=None, pfile=None, **params):
+    @simulate
+    def collect_data(self, specfile=None, **specs):
         """
         Simulate the model in batch mode for data collection.
         """
         # Run the simulation in the data collection run mode
-        params.update(run_mode=RunMode.RECORD)
-        self.setup_model(pfile=pfile, **params)
+        spec.update(run_mode=RunMode.RECORD)
+        self.setup_model()
 
         # Run the main loop until exhaustion
         while State.recorder:
@@ -260,16 +264,17 @@ class SimulatorContext(RandomMixin, AbstractBaseContext, Specified):
         """
         Add extra widgets to be displayed between figure and neurons.
         """
-        self.extra_widgets.extend(widgets)
+        self._extra_widgets.extend(widgets)
 
-    def launch_dashboard(self, return_panel=False, threaded=False,
-        dpi=Config.screendpi, pfile=None, **params):
+    @simulate
+    def launch_dashboard(self, specfile=None, return_panel=False,
+        threaded=False, dpi=Config.screendpi, **specs):
         """
         Construct an interactive Panel dashboard for running the model.
         """
         # Run the simulation in the interactive run mode
-        params.update(run_mode=RunMode.INTERACT)
-        self.setup_model(pfile=pfile, **params)
+        spec.update(run_mode=RunMode.INTERACT)
+        self.setup_model()
 
         # Main figure Matplotlib pane object will be manually updated
         main_figure = Matplotlib(object=State.simplot.fig, dpi=dpi)
@@ -328,12 +333,14 @@ class SimulatorContext(RandomMixin, AbstractBaseContext, Specified):
         player.param.watch(simulation, 'value')
 
         gain_row = pn.Row(
-            *[pn.Column(f'### {grp.name} conductances', *grp.g.get_widgets())
-                for grp in State.network.neuron_groups])
+            *[pn.Column(f'### {grp.name} conductances',
+                *grp.get_gain_sliders())
+                    for grp in State.network.neuron_groups])
 
         neuron_row = pn.Row(
-            *[pn.Column(f'### {grp.name} neurons', *grp.p.get_widgets())
-                for grp in State.network.neuron_groups])
+            *[pn.Column(f'### {grp.name} neurons',
+                *grp.get_neuron_sliders())
+                    for grp in State.network.neuron_groups])
 
         controls = State.network.get_panel_controls(single_column=True)
 
@@ -344,8 +351,8 @@ class SimulatorContext(RandomMixin, AbstractBaseContext, Specified):
         control_columns = [pn.Column(gain_row, neuron_row),
                            pn.Column(*last_column)]
 
-        if self.extra_widgets:
-            extra = pn.Column(*self.extra_widgets)
+        if self._extra_widgets:
+            extra = pn.Column(*self._extra_widgets)
             control_columns.insert(0, extra)
 
         panel = pn.Row(

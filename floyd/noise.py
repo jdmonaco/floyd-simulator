@@ -2,6 +2,9 @@
 Create frozen noise sigals for background synaptic stochasticity.
 """
 
+__all__ = ['OrnsteinUhlenbeckProcess', ]
+
+
 import matplotlib.pyplot as plt
 
 from pouty import printf, box

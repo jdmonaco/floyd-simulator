@@ -8,8 +8,6 @@ import operator as op
 from toolbox.numpy import *
 from tenko.base import TenkoObject
 
-from .spec import is_spec
-
 
 class BaseUnitGroup(TenkoObject):
 
@@ -18,12 +16,11 @@ class BaseUnitGroup(TenkoObject):
     base_dtypes = {}
     default_dtype = 'f'
 
-    def __init__(self, N_or_shape, name, spec=None, dtype=None):
+    def __init__(self, N_or_shape, name, dtype=None):
         """
         Create a group of model units with named variables.
 
         Class-defined unit variables are made available as instance attributes.
-        The optional spec object is made available as instance attribute `p`.
 
         Arguments
         ---------
@@ -33,14 +30,10 @@ class BaseUnitGroup(TenkoObject):
         name : str
             Unique name given to the group
 
-        spec : Spec subclass instance, optional (default None)
-            A Spec instance provides shared parameters to the unit group
-
         dtype : '?' | 'u' | 'i' | 'f' | 'd', optional (default 'f')
             Default numpy dtype to use for initializing array variables
         """
-        super().__init__(name=name)
-        self.name = name
+        super(TenkoObject, self).__init__(name=name)
         self.shape = N_or_shape
         if np.iterable(self.shape):
             self.N = reduce(op.mul, self.shape)
@@ -55,39 +48,10 @@ class BaseUnitGroup(TenkoObject):
         else:
             self.dtype = self.default_dtype
 
-        if spec is not None:
-            spec.validate()
-            self.p = spec
-
         self.variables = list(set(self.base_variables + self.extra_variables))
         for varname in self.variables:
             thisdtype = self.vardtypes.get(varname, self.dtype)
             object.__setattr__(self, varname, zeros(self.shape, thisdtype))
-
-    def __repr__(self):
-        return str(self)
-
-    def __str__(self):
-        return f'{self.__class__.__name__}(name={self.name!r}, ' \
-               f'N={self.shape}, spec={self.p})'
-
-    def __format__(self, fmtspec):
-        return self.name.__format__(fmtspec)
-
-    def _evaluate(self, value):
-        if hasattr(value, 'sample'):
-            return value.sample(self.shape)
-        return value
-
-    def __setattr__(self, name, value):
-        if hasattr(self, 'variables') and name in self.variables:
-            getattr(self, name)[:] = self._evaluate(value)
-            return
-        if name == 'p' and not is_spec(value):
-            self.out(f'Prohibiting setting \'p\' with non-spec: {value!r}',
-                     warning=True)
-            return
-        object.__setattr__(self, name, value)
 
     def set(self, **values):
         """
@@ -95,3 +59,14 @@ class BaseUnitGroup(TenkoObject):
         """
         for name, value in values.items():
             setattr(self, name, value)
+
+    def _evaluate(self, value):
+        if hasattr(value, 'sample'):
+            return value.sample(self.shape)
+        return value
+
+    def __setattr__(self, name, value):
+        if name in self.variables:
+            getattr(self, name)[:] = self._evaluate(value)
+            return
+        super().__setattr__(name, value)

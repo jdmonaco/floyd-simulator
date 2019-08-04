@@ -2,11 +2,13 @@
 Streaming data-trace plots for simulations.
 """
 
+__all__ = ['RealtimeTracesPlot', ]
+
+
 import operator
 from collections import deque
 
 import numpy as np
-from numpy import cumsum, inf
 
 from tenko.base import TenkoObject
 
@@ -207,7 +209,7 @@ class RealtimeTracesPlot(TenkoObject):
             if name in self.rolls:
                 roll = self.q_rolls[name]
                 roll.append(float(value))
-                q_sum = cumsum(roll)
+                q_sum = np.cumsum(roll)
                 q_name.append((q_sum[-1] - q_sum[0])/len(roll))
             else:
                 q_name.append(float(value))
@@ -234,7 +236,7 @@ class RealtimeTracesPlot(TenkoObject):
         # Set data limits on axis (e.g., y-axis if time axis is x-axis)
         if self.datalim in ('auto', 'relax'):
             for ax, names in self.axtraces:
-                axdmin, axdmax = inf, -inf
+                axdmin, axdmax = np.inf, -np.inf
                 for name in names:
                     dmin = min(self.q[name])
                     dmax = max(self.q[name])
