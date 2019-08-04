@@ -48,16 +48,20 @@ class COBANeuronGroup(BaseUnitGroup, Specified):
         """
         super(Specified, self).__init__(**specs)
 
-        # Get the spatial layout to get the number of units
-        self.layout = HexLayout(
-                scale       = self.scale,
-                radius      = self.radius,
-                origin      = self.origin,
-                extent      = self.extent,
-                orientation = self.orientation,
-        )
+        if type(N_or_layout) is int:
+            self.N = N_or_layout
+            self.layout = None
+        else:
+            # Get the spatial layout and then set the number of units
+            self.layout = HexLayout(
+                    scale       = self.scale,
+                    radius      = self.radius,
+                    origin      = self.origin,
+                    extent      = self.extent,
+                    orientation = self.orientation,
+            )
+            self.N = self.layout.N
 
-        self.N = self.layout.N
         super(BaseUnitGroup, self).__init__(self, self.N, name)
 
         # Set up the intrinsic noise inputs (current-based, excitatory
