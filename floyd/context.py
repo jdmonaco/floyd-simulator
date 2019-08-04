@@ -9,16 +9,15 @@ except ImportError:
 
 import os
 import time
-from decorator import decorator
+import functools
 
 from matplotlib.animation import FuncAnimation
 from panel.pane import Matplotlib, Markdown
 import panel as pn
 
 from specify import Specified, Param
-from tenko.context import AbstractBaseContext, step
+from tenko.context import AbstractBaseContext
 from maps.geometry import EnvironmentGeometry
-from roto.dicts import merge_two_dicts
 from roto.strings import sluggify
 from pouty.console import snow as hilite
 from pouty import debug_mode
@@ -32,19 +31,29 @@ SPECFILE = 'specs.json'
 DFLTFILE = 'defaults.json'
 
 
-@decorator
-def simulate(_f_, *args, **kwargs):
+def simulate(func=None, *, mode=None):
     """
-    Declare a method as a simulation in this context.
+    Decorator for simulation methods with keyword-only mode argument, which is
+    only necessary for any non-standard simulation methods (i.e., user-defined
+    methods not named `create_movie`, `collect_data`, or `launch_dashboard`.
     """
-    self = args[0]
-    status = { 'OK': False }
-    self._step_enter(_f_, args, kwargs)
-    self._prepare_simulation(args, kwargs)
-    res = self._step_execute(_f_, args, kwargs, status)
-    self._step_exit(_f_, args, kwargs, status)
+    if func is None:
+        return functools.partial(simulate, mode=RunMode[str(mode).upper()])
+    if mode is None:
+        mode = RunMode(func.__name__)
 
-    return res
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        self = args[0]
+        status = { 'OK': False }
+        State.run_mode = mode  # run mode goes directly to shared state
+        debug(f'running {func.__name__} in {mode!r} mode')
+        self._step_enter(func, args, kwargs)
+        self._prepare_simulation(args, kwargs, finish_setup=True)
+        res = self._step_execute(func, args, kwargs, status)
+        self._step_exit(func, args, kwargs, status)
+        return res
+    return wrapped
 
 
 class SimulatorContext(AbstractBaseContext, Specified):
@@ -66,31 +75,27 @@ class SimulatorContext(AbstractBaseContext, Specified):
     figdpi     = Param(default=Config.figdpi, doc="dots/inch, figure resolution")
     tracewin   = Param(default=Config.tracewin, doc="ms, length of trace plot window")
     calcwin    = Param(default=Config.calcwin, doc="ms, length of rolling calculation window")
-    run_mode   = Param(default=Config.run_mode, doc="'animate'|'interact'|'record', simulation type")
     show_debug = Param(default=Config.show_debug, doc="boolean, whether to show debug statements")
 
     def __init__(self, **kwargs):
         """
-        Separate keyword arguments into tenko.AbstractBaseContext arguments and
-        specify.Specified parameter values. The constructor performs most of
-        the preparatory steps for a simulation except for instantiating the
-        main network object; this mean that the constructor processes keyword
-        arguments as parameter just subsequent calls to one of the simulation
-        methods (decorated with @simulate). A benefit of this is that JSON
-        files with default and specified parameter values are written out to
-        the directory tree (which is created if necessary. These files can be
-        examined and modified before making a call to a simulation method.
+        The constructor performs most of the preparatory steps for a simulation
+        except for instantiating the network. Thus, the constructor processes
+        kwargs as parameters for subsequent calls to the simulation methods
+        (those decorated with @simulate). A benefit of this is that JSON files
+        with default and specified parameter values are written out to the
+        directory tree (which is created if necessary. These files can be
+        examined and modified before making a simulation call.
 
-        Subclasses must override the `setup_model()` method, which should be
-        considered to be the 'kernel' of the model called by the simulation
-        methods (i.e., `create_movie()`, `collect_data()`, and
-        `launch_dashboard()`). Model components from floyd packages and modules
-        should be instantiated and configured within the `setup_model()`
-        implementation.
+        Subclasses must override the `setup_model()` method to define the
+        'kernel' of the model that will be called by other simulation methods
+        (i.e., `create_movie()`, `collect_data()`, and `launch_dashboard()`).
+        Model components from floyd packages and modules should be instantiated
+        and configured within the `setup_model()` implementation.
         """
-        tenkw = AbstractBaseContext.pop_tenko_args(kwargs)
-        super(AbstractBaseContext, self).__init__(**tenkw)
-        super(Specified, self).__init__(**kwargs)
+        debug_mode(Config.show_debug)  # default to config before init
+        super().__init__(**kwargs)
+        debug_mode(self.show_debug)  # use instance attribute after init
         self._extra_widgets = []
         self._specfile_init = kwargs.get('specfile')
         self._prepare_simulation(None, kwargs, finish_setup=False)
@@ -105,71 +110,57 @@ class SimulatorContext(AbstractBaseContext, Specified):
         """
         Implicit method that prepares for an imminent simulation.
         """
-        debug_mode(self.show_debug)
-        step = self._lastcall['step']
-        tag = self._lastcall['tag']
-        rundir = os.path.join(self._ctxdir, step)
-        if tag: prev_rundir += '+{}'.format(sluggify(tag))
+        step = self.current_step()
+        tag = self.current_tag()
+        if step:
+            rundir = os.path.join(self._ctxdir, step)
+            if tag: prev_rundir += '+{}'.format(sluggify(tag))
 
-        # Load a previous specfile from the anticipated rundir path
-        spath = os.path.join(rundir, SPECFILE)
-        try:
-            sfdata = self.read_json(spath)
-        except Exception as e:
-            self.debug(spath, prefix='rundir specs ({SPECFILE!r}) not found')
-        else:
-            # De-serialize the run_mode key
-            if 'run_mode' in sfdata:
-                modename = sfdata['run_mode'].upper()
-                sfdata['run_mode'] = RunMode[modename]
-            self.update(**sfdata)
-            self.out(spath, prefix=f'LoadedSpecFile')
-        finally:
-            debug_mode(self.show_debug)
+            # Load a previous specfile from the anticipated rundir path
+            spath = os.path.join(rundir, SPECFILE)
+            try:
+                sfdata = self.read_json(spath)
+            except Exception as e:
+                self.debug(spath, prefix='specs ({SPECFILE!r}) not found')
+            else:
+                self.update(sfdata)
+                self.out(spath, prefix=f'LoadedSpecFile')
+            finally:
+                debug_mode(self.show_debug)
 
-        # Update from an alternative specfile if one was ... provided
+        # Consume keywords for parameters in class attribute `spec`
+        spec_keys = list(filter(lambda k: k in self.spec, kwargs.keys()))
+        for key in spec_keys:
+            setattr(self, key, kwargs.pop(key))
+            self.debug(f'consuming kwarg {key!r} with {getattr(self, key)!r}')
+
+        # Update from an alternative specfile if one was provided
         specfile = kwargs.pop('specfile', self._specfile_init)
         if specfile:
             fpath, fspecs = self.get_json(specfile)
-            self.update(**fspec)
+            self.update(fspecs)
             self.out(fpath, prefix='LoadedSpecFile')
 
-        # Update Param values with keyword arguments from the call
-        self.update(**kwargs)
-        if kwargs:
-            self.out(repr(list(kwargs.keys())), prefix='LoadedKeywords')
+        # Final point at which `show_debug` could possibly change
         debug_mode(self.show_debug)
-
-        # Derived (e.g., blocksize) and de-serialized (e.g., run_mode) values
-        self.blocksize = int(self.dt_block / self.dt)
-        if type(self.run_mode) is str:
-            modename = self.run_mode.upper()
-            self.run_mode = RunMode[modename]
 
         # Print out the resulting spec parameters
         self.out(f'Simulation parameters:')
         self.printspec()
 
         # Update global scope and shared state
-        specdict = dict(self.values())
+        specdict = dict(**self.items())
         State.reset()
         State.update(specdict)
-        self.get_global_scope().update(**specdict)
+        self.get_global_scope().update(specdict)
 
         # Set the RNG seed if a seed key was provided
-        if 'rnd_seed' in self and self.rnd_seed:
+        if self.rnd_seed:
             self.set_default_random_seed(rnd_seed)
 
-        # Manually serialize the run_mode key and then write a JSON file
-        if isinstance(specdict['run_mode'], RunMode):
-            specdict.update(run_mode=specdict['run_mode'].name.lower())
+        # Write JSON files of current parameter values and defaults
         self.write_json(specdict, SPECFILE)
-
-        # Similarly, write the defaults to a JSON file
-        dfltdict = dict(self.defaults())
-        if isinstance(dfltdict['run_mode'], RunMode):
-            dfltdict.update(run_mode=dfltdict['run_mode'].name.lower())
-        self.write_json(dfltdict, DFLTFILE, base='context')
+        self.write_json(dict(**self.defaults()), DFLTFILE, base='context')
 
         # We want to process parameter updates and write out defaults and
         # specs files during both construction (__init__) and method calls to
@@ -181,7 +172,7 @@ class SimulatorContext(AbstractBaseContext, Specified):
 
         # Display green AnyBar to signal the start of the simulation
         self.set_anybar_color('green')
-        self.debug(f'State = {State}')
+        self.debug(f'State = {State!s}')
 
         # Initialize the simulation network object and store an instance
         # attribute reference (n.b., it goes into shared state anyway)
@@ -208,7 +199,7 @@ class SimulatorContext(AbstractBaseContext, Specified):
             self.out('- {} ({})', k, 'x'.join(list(map(str, getattr(E,
                 k).shape))), prefix='Geometry', hideprefix=True)
 
-    def setup_model(self):
+    def setup_model(self, *args, **kwargs):
         """
         Model construction: This method must be overridden by subclasses to
         define the model that will be simulated.
@@ -216,15 +207,11 @@ class SimulatorContext(AbstractBaseContext, Specified):
         raise NotImplementedError('models must implement setup_model()')
 
     @simulate
-    def create_movie(self, specfile=None, dpi=Config.moviedpi, fps=Config.fps,
-        **specs):
+    def create_movie(self, specfile=None, dpi=Config.moviedpi, fps=Config.fps):
         """
         Simulate the model in batch mode for movie generation.
         """
-        # Run the simulation in the animation run mode
-        spec.update(run_mode=RunMode.ANIMATE)
         self.setup_model()
-
         anim = FuncAnimation(
                 fig       = State.simplot.fig,
                 func      = State.network.animation_update,
@@ -244,19 +231,15 @@ class SimulatorContext(AbstractBaseContext, Specified):
         self.play_movie()
 
     @simulate
-    def collect_data(self, specfile=None, **specs):
+    def collect_data(self, specfile=None):
         """
         Simulate the model in batch mode for data collection.
         """
-        # Run the simulation in the data collection run mode
-        spec.update(run_mode=RunMode.RECORD)
         self.setup_model()
-
-        # Run the main loop until exhaustion
         while State.recorder:
             State.network.model_update()
 
-        # Save simulation data traces
+        # Save simulation recording data
         self.set_anybar_color('blue')
         State.recorder.save()
 
@@ -268,12 +251,10 @@ class SimulatorContext(AbstractBaseContext, Specified):
 
     @simulate
     def launch_dashboard(self, specfile=None, return_panel=False,
-        threaded=False, dpi=Config.screendpi, **specs):
+        threaded=False, dpi=Config.screendpi):
         """
         Construct an interactive Panel dashboard for running the model.
         """
-        # Run the simulation in the interactive run mode
-        spec.update(run_mode=RunMode.INTERACT)
         self.setup_model()
 
         # Main figure Matplotlib pane object will be manually updated

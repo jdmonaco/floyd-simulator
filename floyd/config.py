@@ -47,7 +47,7 @@ Config.figh       = 9.0
 Config.tracewin   = 100.0
 Config.calcwin    = 25.0
 Config.show_debug = False
-Config.run_mode   = RunMode.INTERACT
+Config.run_mode   = None
 
 
 #

@@ -5,15 +5,15 @@ Global state for simulations.
 __all__ = ['State', 'RunMode']
 
 
-from enum import Enum
+import enum
 
 from roto.dicts import AttrDict
 
 
-class RunMode(Enum):
-    ANIMATE  = 'create movies'
-    INTERACT = 'launch dashboards'
-    RECORD   = 'collect data'
+class RunMode(enum.Enum):
+    ANIMATE  = 'create_movie'
+    INTERACT = 'launch_dashboard'
+    RECORD   = 'collect_data'
 
 
 
