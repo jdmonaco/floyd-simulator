@@ -1,58 +1,47 @@
 """
-Conductance-based adaptive exponential integrate-and-fire neuron group.
+A conductance-based adaptive-exponential integrate-fire neuron group.
 """
 
 from toolbox.numpy import *
 
 from .coba import COBANeuronGroup
 
-from ..layout import HexagonalDiscLayout as HexLayout
-from ..spec import paramspec, Param
 from ..state import State
 
 
-class AdExGroup(COBANeuronGroup):
+class AEIFNeuronGroup(COBANeuronGroup):
 
-    @classmethod
-    def get_spec(cls, return_factory=False, **keyvalues):
-        """
-        Return a Spec default factory function or instance with updated values.
-        """
-        if not hasattr(cls, '_Spec'):
-            cls._Spec = paramspec(f'{cls.__name__}Spec',
-                C_m           = Param(200, 50, 400, 5, 'pF'),
-                g_L           = 25.0,
-                E_L           = -58.0,
-                E_exc         = 0.0,
-                E_inh         = -75.0,
-                I_DC_mean     = Param(0, -1e3, 1e3, 1e1, 'pA'),
-                I_noise       = Param(0, -1e3, 1e3, 1e1, 'pA'),
-                g_tonic_exc   = Param(0, 0, 100, 1, 'nS'),
-                g_tonic_inh   = Param(0, 0, 100, 1, 'nS'),
-                g_noise_exc   = Param(0, 0, 100, 1, 'nS'),
-                g_noise_inh   = Param(0, 0, 100, 1, 'nS'),
-                V_r           = Param(-55, -85, -35, 1, 'mV'),
-                delta         = Param(1, 0.25, 6, 0.05, 'mV'),
-                V_t           = Param(-50, -65, -20, 1, 'mV'),
-                V_thr         = Param(20, -85, 20, 1, 'mV'),
-                a             = Param(2, 0, 10, 0.1, 'nS'),
-                b             = Param(100, 0, 200, 1, 'pA'),
-                tau_w         = Param(30, 1, 300, 1, 'ms'),
-                tau_ref       = Param(1, 0, 10, 0.1, 'ms'),
-                tau_noise     = 10.0,
-                tau_noise_exc = 3.0,
-                tau_noise_inh = 10.0,
-                layout        = HexLayout.get_spec(
-                    scale       = 0.1,
-                    radius      = 0.5,
-                    origin      = (0.5, 0.5),
-                    extent      = (0, 1, 0, 1),
-                    orientation = 0.0,
-                ),
-            )
-        if return_factory:
-            return cls._Spec
-        return cls._Spec(**keyvalues)
+    """
+    A general conductance-based adaptive exponential integrate-fire neuron.
+    """
+
+    C_m           = 200.0
+    g_L           = 25.0
+    E_L           = -58.0
+    E_exc         = 0.0
+    E_inh         = -75.0
+    I_DC_mean     = 0.0
+    I_noise       = 0.0
+    g_tonic_exc   = 0.0
+    g_tonic_inh   = 0.0
+    g_noise_exc   = 0.0
+    g_noise_inh   = 0.0
+    V_r           = -55.0
+    delta         = 1.0
+    V_t           = -50.0
+    V_thr         = 20.0
+    a             = 2.0
+    b             = 100.0
+    tau_w         = 30.0
+    tau_ref       = 1.0
+    tau_noise     = 10.0
+    tau_noise_exc = 3.0
+    tau_noise_inh = 10.0
+    scale         = 0.1
+    radius        = 0.5
+    origin        = (0.5, 0.5)
+    extent        = (0, 1, 0, 1)
+    orientation   = 0.0
 
     extra_variables = ('w',)
 
@@ -60,15 +49,14 @@ class AdExGroup(COBANeuronGroup):
         """
         Evolve the membrane voltage for neurons according to input currents.
         """
-        self.v += (State.dt/self.p.C_m) * (
-              self.p.g_L*self.p.delta*exp((self.v - self.p.V_t)/self.p.delta)
-              + self.I_net
+        self.v += (State.dt/self.C_m) * (
+                      self.g_L*self.delta*exp((self.v - self.V_t)/self.delta)
+                      + self.I_net
         )
 
     def update_adaptation(self):
         """
         Update the adaptation variable after spikes are computed.
         """
-        self.w[self.spikes] += self.p.b
-        self.w += (State.dt/self.p.tau_w) * (
-                                    self.p.a*(self.v - self.p.V_r) - self.w)
+        self.w[self.spikes] += self.b
+        self.w += (State.dt/self.tau_w) * (self.a*(self.v - self.V_r) - self.w)

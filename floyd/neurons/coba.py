@@ -5,53 +5,36 @@ Base class for conductance-based model neuron groups.
 from functools import partial
 
 from toolbox.numpy import *
+from specify import Param, Slider, Specified, is_param
 
-from ..layout import get_layout_from_spec
+from ..layout import HexagonalDiscLayout as HexLayout
 from ..noise import OrnsteinUhlenbeckProcess as OUProcess
 from ..activity import FiringRateWindow
-from ..spec import paramspec, Param
 from ..groups import BaseUnitGroup
 from ..config import Config
 from ..state import State, RunMode
 
 
-class COBANeuronGroup(BaseUnitGroup):
+class COBANeuronGroup(BaseUnitGroup, Specified):
 
-    @classmethod
-    def get_spec(cls, return_factory=False, **keyvalues):
-        """
-        Return a Spec default factory function or instance with updated values.
-        """
-        if not hasattr(cls, '_Spec'):
-            cls._Spec = paramspec(f'{cls.__name__}Spec',
-                C_m           = Param(200, 50, 500, 5, 'pF'),
-                g_L           = 30.0,
-                E_L           = -60.0,
-                E_exc         = 0.0,
-                E_inh         = -75.0,
-                I_DC_mean     = Param(0, -1e3, 1e3, 1e1, 'pA'),
-                I_noise       = Param(0, -1e3, 1e3, 1e1, 'pA'),
-                g_tonic_exc   = Param(0, 0, 100, 1, 'nS'),
-                g_tonic_inh   = Param(0, 0, 100, 1, 'nS'),
-                g_noise_exc   = Param(0, 0, 100, 1, 'nS'),
-                g_noise_inh   = Param(0, 0, 100, 1, 'nS'),
-                V_r           = Param(-55, -85, -35, 1, 'mV'),
-                V_thr         = Param(-48, -85, 20, 1, 'mV'),
-                tau_ref       = Param(1, 0, 10, 0.1, 'ms'),
-                tau_noise     = 10.0,
-                tau_noise_exc = 3.0,
-                tau_noise_inh = 10.0,
-                layout        = HexLayout.get_spec(
-                    scale       = 0.1,
-                    radius      = 0.5,
-                    origin      = (0.5, 0.5),
-                    extent      = (0, 1, 0, 1),
-                    orientation = 0.0,
-                ),
-            )
-        if return_factory:
-            return cls._Spec
-        return cls._Spec(**keyvalues)
+    N             = Param(default=1, constant=True, doc='number of neurons in the group')
+    C_m           = Slider(default=200, start=50, end=500, step=5, units='pF', doc='membrane capacitance')
+    g_L           = Param(default=30.0, units='nS', doc='leak conductance')
+    E_L           = Param(default=-60.0, units='mV', doc='leak reversal potential')
+    E_exc         = Param(default=0.0, units='mV', doc='excitatory reversal potential')
+    E_inh         = Param(default=-75.0, units='mV', doc='inhibitory reversal potential')
+    I_DC_mean     = Slider(default=0, start=-1e3, end=1e3, step=1e1, units='pA', doc='mean constant input current')
+    I_noise       = Slider(default=0, start=-1e3, end=1e3, step=1e1, units='pA', doc='noisy input current')
+    g_tonic_exc   = Slider(default=0, start=0, end=100, step=1, units='nS', doc='tonic excitatory input conductance')
+    g_tonic_inh   = Slider(default=0, start=0, end=100, step=1, units='nS', doc='tonic inhibitory input conductance')
+    g_noise_exc   = Slider(default=0, start=0, end=100, step=1, units='nS', doc='noisy excitatory input conductance')
+    g_noise_inh   = Slider(default=0, start=0, end=100, step=1, units='nS', doc='noisy inhibitory input conductance')
+    V_r           = Slider(default=-55, start=-85, end=-35, step=1, units='mV', doc='reset voltage')
+    V_thr         = Slider(default=-48, start=-85, end=20, step=1, units='mV', doc='voltage threshold')
+    tau_ref       = Slider(default=1, start=0, end=10, step=0.1, units='ms', doc='spike-refractory period')
+    tau_noise     = Param(default=10.0, units='ms', doc='time-constant of noisy input current')
+    tau_noise_exc = Param(default=3.0, units='ms', doc='time-constant of noisy excitatory conductance')
+    tau_noise_inh = Param(default=10.0, units='ms', doc='time-constant of noisy inhibitory conductance')
 
     base_dtypes = {'spikes':'?'}
     base_variables = ('x', 'y', 'v', 'spikes', 't_spike', 'g_total',
@@ -59,25 +42,31 @@ class COBANeuronGroup(BaseUnitGroup):
                       'I_app', 'I_net', 'I_leak', 'I_total_inh',
                       'I_total_exc', 'I_proxy')
 
-    def __init__(self, name, spec, gain_param=(0, 10, 0.1, 'gain')):
+    def __init__(self, name, N_or_layout, g_end=10.0, g_step=0.1, **specs):
         """
         Construct the neuron group by computing layouts and noise.
         """
-        # Get the spatial layout to get the number of units
-        if spec.layout is None:
-            raise ValueError('layout required to determine group size')
-        self.layout = get_layout_from_spec(spec.layout)
-        self.N = self.layout.N
+        super(Specified, self).__init__(**specs)
 
-        BaseUnitGroup.__init__(self, self.N, name, spec=spec)
+        # Get the spatial layout to get the number of units
+        self.layout = HexLayout(
+                scale       = self.scale,
+                radius      = self.radius,
+                origin      = self.origin,
+                extent      = self.extent,
+                orientation = self.orientation,
+        )
+
+        self.N = self.layout.N
+        super(BaseUnitGroup, self).__init__(self, self.N, name)
 
         # Set up the intrinsic noise inputs (current-based, excitatory
         # conductance-based, and inhibitory conductance-based). In interactive
         # run mode, generators are used to provide continuous noise.
-        self.oup = OUProcess(N=self.N, tau=spec.tau_noise, seed=self.name)
-        self.oup_exc = OUProcess(N=self.N, tau=spec.tau_noise_exc,
+        self.oup = OUProcess(N=self.N, tau=self.tau_noise, seed=self.name)
+        self.oup_exc = OUProcess(N=self.N, tau=self.tau_noise_exc,
                 seed=self.name+'_excitatory')
-        self.oup_inh = OUProcess(N=self.N, tau=spec.tau_noise_inh,
+        self.oup_inh = OUProcess(N=self.N, tau=self.tau_noise_inh,
                 seed=self.name+'_inhitatory')
         if State.run_mode == RunMode.INTERACT:
             self.eta_gen = self.oup.generator()
@@ -98,29 +87,50 @@ class COBANeuronGroup(BaseUnitGroup):
         self.S_inh = {}
         self.S_exc = {}
         self.synapses = {}
-        self.g = {}
-        self.g = paramspec(f'{name}GainSpec', instance=True,
-                    **{k:Param(State.context.p[k], *gain_param)
-                        for k in State.context.p.keys()
-                            if k.startswith(f'g_{name}_')}
-        )
 
-        # Initialize metrics
+        # Add any conductance gain values in the shared context as Params
+        self.gain_keys = []
+        self.gain_param_base = Slider(start=0.0, end=g_end, step=g_step,
+                owner=self, units='nS')
+        for k, v in vars(State.context.__class__):
+            if k.startswith(f'g_{name}_'):
+                self._add_gain_spec(k, v)
+
+        # Initialize metrics and variables
         self.activity = FiringRateWindow(self)
-
-        # Intialize some variables
-        self.v = self.p.E_L
+        self.v = self.E_L
         self.x = self.layout.x
         self.y = self.layout.y
         self.t_spike = -inf
         self.LFP_uV = 0.0  # uV, LFP signal from summed net synaptic input
 
         # Map from transmitters to reversal potentials
-        self.E_syn = dict(GABA=self.p.E_inh, AMPA=self.p.E_exc,
-                NMDA=self.p.E_exc, glutamate=self.p.E_exc, L=self.p.E_exc)
+        self.E_syn = dict(GABA=self.E_inh, AMPA=self.E_exc,
+                NMDA=self.E_exc, glutamate=self.E_exc, L=self.E_exc)
 
         State.network.add_neuron_group(self)
         self.out(self)
+
+    def _add_gain_spec(self, gname, value):
+        """
+        Add Param (slider) objects for any `g_{post.name}_{pre.name}` class
+        attributes (Param object or just default values) of the shared context.
+        """
+        _, post, pre = gname.split('_')
+        if is_param(value):
+            new_param = self.gain_param_base.copy()
+            new_param.default = float(value.default)
+            value = new_param
+        else:
+            value = Slider(default=float(value),
+                           doc=f'{pre}->{post} max conductance')
+            value._set_names(gname)
+            value.update(self.gain_param_base)
+        self.__class__.__dict__[gname] = value
+        self.__dict__[gname] = copy.deepcopy(value.default)
+        setattr(self, gname, value)
+        self.gain_keys.append(gname)
+        self.debug('added gain key {gname!r} with value {value.default!r}')
 
     def add_synapses(self, synapses):
         """
@@ -139,11 +149,17 @@ class COBANeuronGroup(BaseUnitGroup):
             self.S_exc[gname] = synapses
         self.synapses[gname] = synapses
 
-        # Conductance gains are initialized as a spec, so context parameters
-        # must provide `g_<post>_<pre>` values for all synaptic pathways.
-        # Thus, an error is raised if the value has not been found.
-        if gname not in self.g:
-            raise ValueError('missing gain parameter: {}'.format(repr(gname)))
+        # Check whether the conductance gain spec has already been found in the
+        # shared context. If not, then add a new Param to the spec with a
+        # default value of 1.0.
+        #
+        # Gain spec names take the form `g_<post.name>_<pre.name>`.
+
+        if gname in self.gain_keys:
+            self.debug('gain spec {gname!r} exists for {synapses.name!r}')
+        else:
+            self._add_gain_spec(gname, 1.0)
+            self.debug('added gain spec {gname!r} for {synapses.name!r}')
 
     def update(self):
         """
@@ -161,7 +177,7 @@ class COBANeuronGroup(BaseUnitGroup):
         """
         Evolve the membrane voltage for neurons according to input currents.
         """
-        self.v += (State.dt / self.p.C_m) * self.I_net
+        self.v += (State.dt / self.C_m) * self.I_net
 
     def update_spiking(self):
         """
@@ -169,11 +185,11 @@ class COBANeuronGroup(BaseUnitGroup):
         """
         # Enforce absolute refractory period
         dt = State.t - self.t_spike
-        self.v[dt < self.p.tau_ref] = self.p.V_r
+        self.v[dt < self.tau_ref] = self.V_r
 
         # Perform voltage resets for threshold crossings
-        self.spikes = self.v > self.p.V_thr
-        self.v[self.spikes] = self.p.V_r
+        self.spikes = self.v > self.V_thr
+        self.v[self.spikes] = self.V_r
 
         # Update most-recent spike time for units that spiked
         self.t_spike[self.spikes] = State.t
@@ -182,24 +198,23 @@ class COBANeuronGroup(BaseUnitGroup):
         """
         Update any adaptation variables after spikes are computed.
         """
-        pass
 
     def update_conductances(self):
         """
         Update total input conductances for afferent synapses.
         """
-        self.g_total_exc = self.p.g_tonic_exc
-        if self.p.g_noise_exc:
-            self.g_total_exc += self.p.g_noise_exc * self.eta_exc
+        self.g_total_exc = self.g_tonic_exc
+        if self.g_noise_exc:
+            self.g_total_exc += self.g_noise_exc * self.eta_exc
 
-        self.g_total_inh = self.p.g_tonic_inh
-        if self.p.g_noise_inh:
-            self.g_total_inh += self.p.g_noise_inh * self.eta_inh
+        self.g_total_inh = self.g_tonic_inh
+        if self.g_noise_inh:
+            self.g_total_inh += self.g_noise_inh * self.eta_inh
 
         for gname in self.S_exc.keys():
-            self.g_total_exc += self.g[gname] * self.S_exc[gname].g_total
+            self.g_total_exc += self[gname] * self.S_exc[gname].g_total
         for gname in self.S_inh.keys():
-            self.g_total_inh += self.g[gname] * self.S_inh[gname].g_total
+            self.g_total_inh += self[gname] * self.S_inh[gname].g_total
 
         self.g_total = self.g_total_exc + self.g_total_inh
 
@@ -207,11 +222,11 @@ class COBANeuronGroup(BaseUnitGroup):
         """
         Calculate total currents based on total conductances.
         """
-        self.I_leak      = self.p.g_L * (self.p.E_L - self.v)
-        self.I_total_exc = self.g_total_exc * (self.p.E_exc - self.v)
-        self.I_total_inh = self.g_total_inh * (self.p.E_inh - self.v)
-        self.I_proxy     = self.p.I_noise * self.eta
-        self.I_app       = self.p.I_DC_mean * self.excitability
+        self.I_leak      = self.g_L * (self.E_L - self.v)
+        self.I_total_exc = self.g_total_exc * (self.E_exc - self.v)
+        self.I_total_inh = self.g_total_inh * (self.E_inh - self.v)
+        self.I_proxy     = self.I_noise * self.eta
+        self.I_app       = self.I_DC_mean * self.excitability
         self.I_net       = self.I_leak + self.I_app + self.I_proxy + \
                                self.I_total_exc + self.I_total_inh
 
@@ -220,13 +235,13 @@ class COBANeuronGroup(BaseUnitGroup):
         Update the intrinsic noise sources (for those with nonzero gains).
         """
         if State.run_mode == RunMode.INTERACT:
-            if self.p.I_noise: self.eta = next(self.eta_gen)
-            if self.p.g_noise_exc: self.eta_exc = next(self.eta_gen_exc)
-            if self.p.g_noise_inh: self.eta_inh = next(self.eta_gen_inh)
+            if self.I_noise: self.eta = next(self.eta_gen)
+            if self.g_noise_exc: self.eta_exc = next(self.eta_gen_exc)
+            if self.g_noise_inh: self.eta_inh = next(self.eta_gen_inh)
         else:
-            if self.p.I_noise: self.eta = self.oup.eta[...,State.n]
-            if self.p.g_noise_exc: self.eta_exc = self.oup_exc.eta[...,State.n]
-            if self.p.g_noise_inh: self.eta_inh = self.oup_inh.eta[...,State.n]
+            if self.I_noise: self.eta = self.oup.eta[...,State.n]
+            if self.g_noise_exc: self.eta_exc = self.oup_exc.eta[...,State.n]
+            if self.g_noise_inh: self.eta_inh = self.oup_inh.eta[...,State.n]
 
     def update_metrics(self):
         """
@@ -235,13 +250,6 @@ class COBANeuronGroup(BaseUnitGroup):
         self.LFP_uV = -(
                 self.I_total_exc.sum() + self.I_total_inh.sum()) / Config.g_LFP
         self.activity.update()
-
-    def reset(self):
-        """
-        Reset the neuron model and gain parameters to spec defaults.
-        """
-        self.p.reset()
-        self.g.reset()
 
     def rates(self):
         """
@@ -288,3 +296,16 @@ class COBANeuronGroup(BaseUnitGroup):
         # currently at extremes.
 
         return (apulse**4 + rpulse**4) / 2
+
+    def get_neuron_sliders(self):
+        """
+        Return a tuple of Panel FloatSlider objects for neuron Param values.
+        """
+        neuron_keys = [k for k in self if k not in self.gain_keys]
+        return self.widgets(*neuron_keys)
+
+    def get_gain_sliders(self):
+        """
+        Return a tuple of Panel FloatSlider objects for gain Param values.
+        """
+        return self.widgets(*self.gain_keys)

@@ -3,38 +3,26 @@ Groups of synaptic connections between a pair of neuron groups.
 """
 
 from toolbox.numpy import *
-from tenko.mixins import RandomMixin
+from specify import Specified, Slider
 
 from ..matrix import pairwise_distances as distances
 from ..groups import BaseUnitGroup
-from ..spec import paramspec
 from ..state import State
 
 from ..synapses import Synapses
 
+
 class RateSynapses(Synapses):
 
-    @classmethod
-    def get_spec(cls, return_factory=False, **keyvalues):
-        """
-        Return a Spec default factory function or instance with updated values.
-        """
-        if not hasattr(cls, '_Spec'):
-            cls._Spec = paramspec(f'{cls.__name__}Spec',
-                transmitter = 'glutamate',
-                I_max       = 1.0,
-            )
-        if return_factory:
-            return cls._Spec
-        return cls._Spec(**keyvalues)
+    transmitter = 'glutamate'
+    I_max       = Slider(default=1e1, start=0.0, end=1e3, step=1.0, doc='maximum synaptic current input')
 
     base_variables = ('C', 'S', 'I', 'I_peak')
 
-    def __init__(self, pre, post, spec, seed=None):
-        self.get_spec().is_valid(spec)
-
+    def __init__(self, pre, post, seed=None, **specs):
         name = f'{pre.name}->{post.name}'
-        BaseUnitGroup.__init__(self, (post.N, pre.N), name, spec=spec)
+        super(BaseUnitGroup, self).__init__((post.N, pre.N), name)
+        super(Specified, self).__init__(**specs)
 
         self.pre = pre
         self.post = post
@@ -42,7 +30,7 @@ class RateSynapses(Synapses):
         self.set_random_seed(seed)
 
         self.delay = None
-        self.I_peak = self.p.I_max
+        self.I_peak = self.I_max
         self.I_total = zeros(post.N, 'f')
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
