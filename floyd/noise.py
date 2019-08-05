@@ -2,7 +2,7 @@
 Create frozen noise sigals for background synaptic stochasticity.
 """
 
-__all__ = ['OrnsteinUhlenbeckProcess', ]
+__all__ = ['OUNoiseProcess']
 
 
 import matplotlib.pyplot as plt
@@ -11,20 +11,27 @@ from pouty import printf, box
 
 from toolbox.numpy import *
 from tenko.persistence import AutomaticCache
+from tenko.base import TenkoObject
+from specify import Specified, Param
 
 from .state import State
 
 
-class OrnsteinUhlenbeckProcess(AutomaticCache):
+class OUNoiseProcess(Specified, AutomaticCache, TenkoObject):
 
-    data_root = 'noise'
-    key_params = ('duration', 'dt', 'tau', 'N', 'rand_init')
-    cache_attrs = ('t', 'eta')
-    save_attrs = ('Nt', 'std')
+    N = Param(default=1, doc='number of noise signals')
+    tau = Param(default=10.0, doc='time-constant of noise filter')
+    rand_init = Param(default=True, doc='random initialization')
+    seed = Param(default=__name__, doc='string, seed key for RNG state')
 
-    def __init__(self, N=1, tau=10.0, seed=None, rand_init=True):
-        AutomaticCache.__init__(self, duration=State.duration, dt=State.dt,
-                tau=tau, N=N, seed=seed, rand_init=rand_init)
+    _data_root = 'noise'
+    _key_params = ('N', 'tau', 'rand_init', 'seed', 'duration', 'dt')
+    _cache_attrs = ('t', 'eta')
+    _save_attrs = ('Nt', 'std')
+
+    def __init__(self, **specs):
+        super().__init__(spec_produce=self._key_params,
+                         duration=State.duration, dt=State.dt, **specs)
 
     def _compute(self):
         """

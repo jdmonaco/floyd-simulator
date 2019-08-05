@@ -46,7 +46,7 @@ Config.figw       = 9.0
 Config.figh       = 9.0
 Config.tracewin   = 100.0
 Config.calcwin    = 25.0
-Config.show_debug = False
+Config.show_debug = True
 Config.run_mode   = None
 
 

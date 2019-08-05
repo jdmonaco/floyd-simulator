@@ -16,7 +16,7 @@ from panel.pane import Matplotlib, Markdown
 import panel as pn
 
 from specify import Specified, Param
-from tenko.context import AbstractBaseContext
+from tenko.context import AbstractBaseContext, step
 from maps.geometry import EnvironmentGeometry
 from roto.strings import sluggify
 from pouty.console import snow as hilite
@@ -35,7 +35,7 @@ def simulate(func=None, *, mode=None):
     """
     Decorator for simulation methods with keyword-only mode argument, which is
     only necessary for any non-standard simulation methods (i.e., user-defined
-    methods not named `create_movie`, `collect_data`, or `launch_dashboard`.
+    methods not named `create_movie`, `collect_data`, or `launch_dashboard`).
     """
     if func is None:
         return functools.partial(simulate, mode=RunMode[str(mode).upper()])
@@ -56,7 +56,7 @@ def simulate(func=None, *, mode=None):
     return wrapped
 
 
-class SimulatorContext(AbstractBaseContext, Specified):
+class SimulatorContext(Specified, AbstractBaseContext):
 
     """
     Context base class for simulations.
@@ -101,10 +101,11 @@ class SimulatorContext(AbstractBaseContext, Specified):
         self._prepare_simulation(None, kwargs, finish_setup=False)
 
     def __str__(self):
-        return super(Specified, self).__str__()
+        return super().__str__()
 
     def printspec(self):
-        self.out(str(self), hideprefix=True)
+        self.printf(f'{self!s}')
+        self.newline()
 
     def _prepare_simulation(self, args, kwargs, finish_setup=True):
         """
@@ -141,6 +142,9 @@ class SimulatorContext(AbstractBaseContext, Specified):
             self.update(fspecs)
             self.out(fpath, prefix='LoadedSpecFile')
 
+        # Derived values to be updated (e.g., blocksize)
+        self.blocksize = int(self.dt_block / self.dt)
+
         # Final point at which `show_debug` could possibly change
         debug_mode(self.show_debug)
 
@@ -149,7 +153,7 @@ class SimulatorContext(AbstractBaseContext, Specified):
         self.printspec()
 
         # Update global scope and shared state
-        specdict = dict(**self.items())
+        specdict = dict(self.items())
         State.reset()
         State.update(specdict)
         self.get_global_scope().update(specdict)
@@ -160,7 +164,7 @@ class SimulatorContext(AbstractBaseContext, Specified):
 
         # Write JSON files of current parameter values and defaults
         self.write_json(specdict, SPECFILE)
-        self.write_json(dict(**self.defaults()), DFLTFILE, base='context')
+        self.write_json(dict(self.defaults()), DFLTFILE, base='context')
 
         # We want to process parameter updates and write out defaults and
         # specs files during both construction (__init__) and method calls to

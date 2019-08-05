@@ -16,7 +16,7 @@ class BaseUnitGroup(TenkoObject):
     base_dtypes = {}
     default_dtype = 'f'
 
-    def __init__(self, N_or_shape, name, dtype=None):
+    def __init__(self, *, N, dtype=None, **kwargs):
         """
         Create a group of model units with named variables.
 
@@ -24,34 +24,34 @@ class BaseUnitGroup(TenkoObject):
 
         Arguments
         ---------
-        N_or_shape : int | tuple of ints
+        N : int | tuple of ints
             The size of the group (or shape if multiple dimensions needed)
 
         name : str
             Unique name given to the group
 
-        dtype : '?' | 'u' | 'i' | 'f' | 'd', optional (default 'f')
+        dtype : dict | '?' | 'u' | 'i' | 'f' | 'd', optional (default 'f')
             Default numpy dtype to use for initializing array variables
         """
-        super(TenkoObject, self).__init__(name=name)
-        self.shape = N_or_shape
+        super().__init__(**kwargs)
+
+        self.shape = N
         if np.iterable(self.shape):
             self.N = reduce(op.mul, self.shape)
         else:
             self.N = self.shape
 
-        self.vardtypes = dict(self.base_dtypes)
+        self._vardtypes = dict(self.base_dtypes)
+        dflt_dtype = self.default_dtype
         if type(dtype) is dict:
-            self.vardtypes = merge_two_dicts(self.vardtypes, dtypes)
+            self._vardtypes = merge_two_dicts(self._vardtypes, dtype)
         elif type(dtype) is str and dtype[0] in '?uifd':
-            self.dtype = dtype
-        else:
-            self.dtype = self.default_dtype
+            dflt_dtype = dtype
 
-        self.variables = list(set(self.base_variables + self.extra_variables))
-        for varname in self.variables:
-            thisdtype = self.vardtypes.get(varname, self.dtype)
-            object.__setattr__(self, varname, zeros(self.shape, thisdtype))
+        self._variables = list(set(self.base_variables + self.extra_variables))
+        for varname in self._variables:
+            thisdtype = self._vardtypes.get(varname, dflt_dtype)
+            self.__dict__[varname] = zeros(self.shape, thisdtype)
 
     def set(self, **values):
         """
@@ -66,7 +66,7 @@ class BaseUnitGroup(TenkoObject):
         return value
 
     def __setattr__(self, name, value):
-        if name in self.variables:
+        if hasattr(self, '_variables') and name in self._variables:
             getattr(self, name)[:] = self._evaluate(value)
             return
         super().__setattr__(name, value)

@@ -18,7 +18,7 @@ class RunMode(enum.Enum):
 
 
 class SharedState(AttrDict):
-    def reset():
+    def reset(self):
         for key in self.keys():
             self[key] = None
 
