@@ -12,11 +12,12 @@ import matplotlib.pyplot as plt
 from toolbox.numpy import *
 from pouty import printf, box
 from toolbox.constants import twopi
-from tenko.persistence import AutomaticCache
 from specify import Specified, Param
+from tenko.persistence import AutomaticCache
+from tenko.base import TenkoObject
 
 
-class HexagonalDiscLayout(AutomaticCache, Specified):
+class HexagonalDiscLayout(Specified, AutomaticCache, TenkoObject):
 
     """
     Spatial layout of a hexagonal grid circumscribed by a circle.
@@ -28,16 +29,13 @@ class HexagonalDiscLayout(AutomaticCache, Specified):
     extent      = Param(default=(0, 1, 0, 1), units='mm', doc='(left, right, bottom, top) extent')
     orientation = Param(default=0.0, units='radians', doc='angle of grid orientation')
 
-    data_root   = 'layout'
-    key_params  = ('scale', 'radius', 'origin', 'extent', 'orientation')
-    cache_attrs = ('x', 'y')
-    save_attrs  = ('N',)
+    _data_root   = 'layout'
+    _key_params  = ('scale', 'radius', 'origin', 'extent', 'orientation')
+    _cache_attrs = ('x', 'y')
+    _save_attrs  = ('N',)
 
     def __init__(self, **specs):
-        super(Specified, self).__init__(**specs)
-        super(AutomaticCache, self).__init__(self, scale=self.scale,
-                radius=self.radius, origin=self.origin, extent=self.extent,
-                orientation=self.orientation)
+        super().__init__(spec_produce=self._key_params, **specs)
 
     def _compute(self):
         """
