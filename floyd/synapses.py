@@ -14,7 +14,7 @@ from .delay import DelayLines
 from .state import State
 
 
-class Synapses(BaseUnitGroup, Specified):
+class Synapses(Specified, BaseUnitGroup):
 
     transmitter = Param(default='glutamate', doc="'GABA' | 'glutamate'")
     g_max       = Param(default=1.0, units="nS")
@@ -26,17 +26,16 @@ class Synapses(BaseUnitGroup, Specified):
 
     base_variables = ('C', 'S', 't_spike', 'dt_spike', 'g', 'g_peak', 'p_r')
 
-    def __init__(self, pre, post, seed=None, **specs):
-        name = f'{pre.name}->{post.name}'
-        super(BaseUnitGroup, self).__init__((post.N, pre.N), name)
-        super(Specified, self).__init__(**specs)
+    def __init__(self, pre, post, **kwargs):
+        self._initialized = False
+        super().__init__(name=f'{pre.name}->{post.name}', N=(post.N, pre.N),
+                **kwargs)
 
         self.E_syn = post.E_syn[self.transmitter]
         self.s = scale_constant(self)
         self.pre = pre
         self.post = post
         self.recurrent = pre is post
-        self.set_random_seed(seed)
 
         self.delay = None
         self.g_peak = self.g_max
@@ -49,6 +48,7 @@ class Synapses(BaseUnitGroup, Specified):
                 prefix='PostSynPotential')
 
         State.network.add_synapses(self)
+        self._initialized = True
 
     def scale_constant(self):
         """

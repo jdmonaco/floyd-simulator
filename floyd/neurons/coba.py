@@ -127,7 +127,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
 
         if is_param(value):
             for k in value.__slots__:
-                if k in new_param.__slots__ and getattr(value, k) is not None:
+                if hasattr(value, k) and getattr(value, k) is not None and \
+                        k in new_param.__slots__:
                     slotval = copy.copy(getattr(value, k))
                     object.__setattr__(new_param, k, slotval)
             value = new_param.default

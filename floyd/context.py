@@ -96,7 +96,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         kwargs as parameters for subsequent calls to the simulation methods
         (those decorated with @simulate). A benefit of this is that JSON files
         with default and specified parameter values are written out to the
-        directory tree (which is created if necessary. These files can be
+        directory tree (which is created if necessary). These files can be
         examined and modified before making a simulation call.
 
         Subclasses must override the `setup_model()` method to define the

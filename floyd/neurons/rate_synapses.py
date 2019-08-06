@@ -1,12 +1,11 @@
 """
-Groups of synaptic connections between a pair of neuron groups.
+Groups of synaptic connections between a pair of rate-based neuron groups.
 """
 
 from toolbox.numpy import *
-from specify import Specified, Slider
+from specify import Slider
 
 from ..matrix import pairwise_distances as distances
-from ..groups import BaseUnitGroup
 from ..state import State
 
 from ..synapses import Synapses
@@ -19,15 +18,13 @@ class RateSynapses(Synapses):
 
     base_variables = ('C', 'S', 'I', 'I_peak')
 
-    def __init__(self, pre, post, seed=None, **specs):
-        name = f'{pre.name}->{post.name}'
-        super(BaseUnitGroup, self).__init__((post.N, pre.N), name)
-        super(Specified, self).__init__(**specs)
+    def __init__(self, pre, post, **kwargs):
+        self._initialized = False
+        super().__init__(pre, post, **kwargs)
 
         self.pre = pre
         self.post = post
         self.recurrent = pre is post
-        self.set_random_seed(seed)
 
         self.delay = None
         self.I_peak = self.I_max
@@ -35,6 +32,7 @@ class RateSynapses(Synapses):
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
         State.network.add_synapses(self)
+        self._initialized = True
 
     def set_delays(self, cond_velocity=0.5):
         """
