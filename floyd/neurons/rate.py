@@ -1,5 +1,5 @@
 """
-Base class for conductance-based model neuron groups.
+Base class for current-based rate-coding neuron groups.
 """
 
 from functools import partial
@@ -7,14 +7,13 @@ from functools import partial
 from toolbox.numpy import *
 from specify import Param, Slider, Specified, is_param
 
-from ..noise import OrnsteinUhlenbeckProcess as OUProcess
+from ..noise import OUNoiseProcess
 from ..groups import BaseUnitGroup
 from ..state import State, RunMode
 
 
-class RateNeuronGroup(BaseUnitGroup):
+class RateNeuronGroup(Specified, BaseUnitGroup):
 
-    N         = Param(default=1, doc='number of neurons in the group')
     tau_m     = Slider(default=10.0, start=1.0, end=100.0, step=0.1, units='ms', doc='')
     r_rest    = Slider(default=0.0, start=1.0, end=100.0, step=0.1, units='sp/s', doc='')
     r_max     = Slider(default=100.0, start=1.0, end=500.0, step=1.0, units='sp/s', doc='')
@@ -26,17 +25,16 @@ class RateNeuronGroup(BaseUnitGroup):
                       'excitability', 'I_app', 'I_net', 'I_leak',
                       'I_total_inh', 'I_total_exc', 'I_proxy')
 
-    def __init__(self, name, gain_max=10.0, gain_step=0.1, **specs):
+    def __init__(self, *, name, N, g_end=10.0, g_step=0.1, **kwargs):
         """
         Construct the neuron group by computing layouts and noise.
         """
-        super(Specified, self).__init__(**specs)
-        super(BaseUnitGroup, self).__init__(self, self.N, name)
+        super().__init__(name=name, N=N, **kwargs)
 
         # Set up the intrinsic noise inputs (current-based only for rate-based
         # neurons. In interactive run mode, generators are used to provide
         # continuous noise.
-        self.oup = OUProcess(N=self.N, tau=self.tau_noise, seed=self.name)
+        self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise, seed=self.name)
         if State.run_mode == RunMode.INTERACT:
             self.eta_gen = self.oup.generator()
             self.eta = next(self.eta_gen)
@@ -51,9 +49,9 @@ class RateNeuronGroup(BaseUnitGroup):
 
         # Add any conductance gain values in the shared context as Params
         self.gain_keys = []
-        self.gain_param_base = Slider(start=0.0, end=gain_max, step=gain_step,
-                owner=self, units='nS')
-        for k, v in vars(State.context.__class__):
+        self.gain_param_base = Slider(default=1.0, start=0.0, end=g_end,
+                step=g_step, units='nS')
+        for k, v in vars(State.context.__class__).items():
             if k.startswith(f'g_{name}_'):
                 self._add_gain_spec(k, v)
 
@@ -65,7 +63,6 @@ class RateNeuronGroup(BaseUnitGroup):
                 NMDA=self.E_exc, glutamate=self.E_exc, L=self.E_exc)
 
         State.network.add_neuron_group(self)
-        self.out(self)
 
     def _add_gain_spec(self, gname, value):
         """
@@ -73,20 +70,22 @@ class RateNeuronGroup(BaseUnitGroup):
         attributes (Param object or just default values) of the shared context.
         """
         _, post, pre = gname.split('_')
+        new_param = copy.copy(self.gain_param_base)
+        new_param.doc = f'{pre}->{post} max conductance'
+
         if is_param(value):
-            new_param = self.gain_param_base.copy()
-            new_param.default = float(value.default)
-            value = new_param
+            for k in value.__slots__:
+                if k in new_param.__slots__ and getattr(value, k) is not None:
+                    slotval = copy.copy(getattr(value, k))
+                    object.__setattr__(new_param, k, slotval)
+            value = new_param.default
         else:
-            value = Slider(default=float(value),
-                           doc=f'{pre}->{post} max conductance')
-            value._set_names(gname)
-            value.update(self.gain_param_base)
-        self.__class__.__dict__[gname] = value
-        self.__dict__[gname] = copy.deepcopy(value.default)
-        setattr(self, gname, value)
+            new_param.default = copy.deepcopy(value)
+
+        self._add_param(gname, new_param)
+        self.__dict__[new_param.attrname] = copy.deepcopy(new_param.default)
         self.gain_keys.append(gname)
-        self.debug('added gain key {gname!r} with value {value.default!r}')
+        self.debug('added gain {gname!r} with value {new_param.default!r}')
 
     def add_synapses(self, synapses):
         """
@@ -99,7 +98,7 @@ class RateNeuronGroup(BaseUnitGroup):
 
         # Add synapses to list of inhibitory or excitatory afferents
         gname = 'g_{}_{}'.format(synapses.post.name, synapses.pre.name)
-        if synapses.p.transmitter == 'GABA':
+        if synapses.transmitter == 'GABA':
             self.S_inh[gname] = synapses
         else:
             self.S_exc[gname] = synapses

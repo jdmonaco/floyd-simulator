@@ -3,6 +3,7 @@ A conductance-based adaptive-exponential integrate-fire neuron group.
 """
 
 from toolbox.numpy import *
+from specify import Slider
 
 from .coba import COBANeuronGroup
 
@@ -15,33 +16,16 @@ class AEIFNeuronGroup(COBANeuronGroup):
     A general conductance-based adaptive exponential integrate-fire neuron.
     """
 
-    C_m           = 200.0
     g_L           = 25.0
     E_L           = -58.0
-    E_exc         = 0.0
-    E_inh         = -75.0
-    I_DC_mean     = 0.0
-    I_noise       = 0.0
-    g_tonic_exc   = 0.0
-    g_tonic_inh   = 0.0
-    g_noise_exc   = 0.0
-    g_noise_inh   = 0.0
-    V_r           = -55.0
-    delta         = 1.0
-    V_t           = -50.0
+    g_tonic_exc   = 10.0
+    g_tonic_inh   = 15.0
+    delta         = Slider(default=1.0, units='mV', start=0.5, end=4.0, step=0.1, doc='slope factor')
+    V_t           = Slider(default=-50.0, units='mV', start=-65, end=-20, step=0.1, doc='voltage threshold')
     V_thr         = 20.0
-    a             = 2.0
-    b             = 100.0
-    tau_w         = 30.0
-    tau_ref       = 1.0
-    tau_noise     = 10.0
-    tau_noise_exc = 3.0
-    tau_noise_inh = 10.0
-    scale         = 0.1
-    radius        = 0.5
-    origin        = (0.5, 0.5)
-    extent        = (0, 1, 0, 1)
-    orientation   = 0.0
+    a             = Slider(default=2.0, units='nS', start=0.2, end=6, step=0.1, doc='voltage coupling')
+    b             = Slider(default=100.0, units='pA', start=0.0, end=200, step=1, doc='spike-adaptation strength')
+    tau_w         = Slider(default=30.0, units='ms', start=1.0, end=400, step=5, doc='adaptation time-constant')
 
     extra_variables = ('w',)
 

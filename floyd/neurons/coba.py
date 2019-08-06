@@ -52,13 +52,10 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
             self.N = N
             self.layout = None
         elif layout:
-            self.layout = HexLayout(
-                    scale       = self.scale,
-                    radius      = self.radius,
-                    origin      = self.origin,
-                    extent      = self.extent,
-                    orientation = self.orientation,
-            )
+            if not hasattr(layout, 'compute'):
+                layout = HexLayout(**layout)
+            layout.compute(context=State.context)
+            self.layout = layout
             self.N = self.layout.N
         else:
             raise ValueError('either N or layout is required')
@@ -72,7 +69,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         self.oup_exc = OUNoiseProcess(N=self.N, tau=self.tau_noise_exc,
                 seed=self.name+'_excitatory')
         self.oup_inh = OUNoiseProcess(N=self.N, tau=self.tau_noise_inh,
-                seed=self.name+'_inhitatory')
+                seed=self.name+'_inhibitory')
         if State.run_mode == RunMode.INTERACT:
             self.eta_gen = self.oup.generator()
             self.eta_gen_exc = self.oup_exc.generator()
@@ -103,6 +100,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
 
         # Initialize metrics and variables
         self.activity = FiringRateWindow(self)
+        self.set_pulse_metrics()  # uses default pulse curves
         self.v = self.E_L
         if self.layout:
             self.x = self.layout.x
@@ -152,7 +150,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
 
         # Add synapses to list of inhibitory or excitatory afferents
         gname = 'g_{}_{}'.format(synapses.post.name, synapses.pre.name)
-        if synapses.p.transmitter == 'GABA':
+        if synapses.transmitter == 'GABA':
             self.S_inh[gname] = synapses
         else:
             self.S_exc[gname] = synapses
@@ -310,11 +308,10 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         """
         Return a tuple of Panel FloatSlider objects for neuron Param values.
         """
-        neuron_keys = [k for k in self if k not in self.gain_keys]
-        return self.widgets(*neuron_keys)
+        return self.get_widgets(exclude=self.gain_keys)
 
     def get_gain_sliders(self):
         """
         Return a tuple of Panel FloatSlider objects for gain Param values.
         """
-        return self.widgets(*self.gain_keys)
+        return self.get_widgets(include=self.gain_keys)
