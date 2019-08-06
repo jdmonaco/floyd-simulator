@@ -293,7 +293,8 @@ class Network(TenkoObject):
         """
         Print out detailed fanin/fanout statistics for each projection.
         """
-        self.out.hline()
+        if self.synapses:
+            self.out.hline()
         for synapses in self.synapses.values():
             synapses.connectivity_stats()
             self.out.hline()

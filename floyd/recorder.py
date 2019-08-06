@@ -48,7 +48,7 @@ class ModelRecorder(TenkoObject):
         saved to the context datafile in the `save_recordings` method.
         """
         assert State.dt_rec >= State.dt, 'recording interval < simulation dt'
-        super().__init__(self)
+        super().__init__()
 
         # Simulation time & progress tracking
         State.ts = np.arange(0, State.duration + State.dt, State.dt)

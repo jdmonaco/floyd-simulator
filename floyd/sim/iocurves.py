@@ -28,7 +28,6 @@ class InputOutputCurves(FloydContext):
     figh       = 9.0      # inches main figure height
     tracewin   = 100.0    # ms trace plot window
     calcwin    = 50.0     # ms rolling calculation window
-    show_debug = True     # run in debug mode
 
     # Model parameters
     N           = Param(default=100, doc='number of neurons')
@@ -151,7 +150,7 @@ class InputOutputCurves(FloydContext):
         Plot a simple figure of spiking and voltage traces.
         """
         fig = self.figure('iocurves', clear=True, figsize=(11,3.7),
-                title=f'Stepped Series Stimulation of {self.groupname}')
+                title=f'Stepped Series Stimulation of IOGroup')
 
         t = self.read_array('t', step='collect_data')
         v = self.read_array('v', step='collect_data')
@@ -182,7 +181,6 @@ class InputOutputCurves(FloydContext):
         """
         Compute f-I curves based on simulation data.
         """
-        self.load_parameters(step='collect_data', tag=tag)
         root = dict(tag=tag, step='collect_data')
         t = self.read_array('t', **root)
         v = self.read_array('v', **root)

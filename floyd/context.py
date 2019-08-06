@@ -59,7 +59,6 @@ def simulate(func=None, *, mode=None):
         self.setup_model()
         State.network.display_neural_connectivity()
         State.network.display_object_counts()
-        self.hline()
 
         # Execute the requested simulation loop
         res = self._step_execute(func, args, kwargs, status)
@@ -159,8 +158,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
             setattr(self, key, kwargs.pop(key))
             self.debug(f'consumed kwarg {key!r} with {getattr(self, key)!r}')
         if spec_keys:
-            self.out('Updated {} parameters: {}', len(spec_keys), spec_keys,
-                     prefix='KeywordSpecs')
+            self.out('Updated {} parameter spec values', prefix='KeywordSpecs')
 
         # Derived values to be updated (e.g., blocksize)
         self.blocksize = int(self.dt_block / self.dt)
@@ -247,11 +245,10 @@ class SimulatorContext(Specified, AbstractBaseContext):
         )
 
         # Save the animation as a movie file and play the movie!
-        self['movie_file'] = self.filename(use_modname=True, use_runtag=True,
+        self.c['movie_file'] = self.filename(use_modname=True, use_runtag=True,
                 ext='mp4')
         anim.save(self.path(self.c.movie_file), fps=fps, dpi=dpi)
         State.simplot.closefig()
-        self.hline()
         self.play_movie()
 
     @simulate
