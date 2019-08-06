@@ -2,6 +2,9 @@
 Record state, model variables, and spike/event data across a simulation.
 """
 
+__all__ = ['ModelRecorder']
+
+
 import numpy as np
 import pandas as pd
 
@@ -54,7 +57,7 @@ class ModelRecorder(TenkoObject):
         State.t = -State.dt
         self.Nprogress = 0
         self.show_progress = show_progress and not (
-                         State.debug or State.run_mode == RunMode.INTERACT)
+                     State.show_debug or State.run_mode == RunMode.INTERACT)
 
         # Recording time tracking
         self.ts_rec = np.arange(0, State.duration + State.dt_rec, State.dt_rec)

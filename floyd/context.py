@@ -2,6 +2,9 @@
 Base simulator context.
 """
 
+__all__ = ['SimulatorContext', 'simulate', 'step']
+
+
 try:
     import panel as pn
 except ImportError:
@@ -20,7 +23,7 @@ from tenko.context import AbstractBaseContext, step
 from maps.geometry import EnvironmentGeometry
 from roto.strings import sluggify
 from pouty.console import snow as hilite
-from pouty import debug_mode
+from pouty import debug_mode, debug
 
 from .network import Network
 from .state import State, RunMode
@@ -46,10 +49,19 @@ def simulate(func=None, *, mode=None):
     def wrapped(*args, **kwargs):
         self = args[0]
         status = { 'OK': False }
-        State.run_mode = mode  # run mode goes directly to shared state
-        debug(f'running {func.__name__} in {mode!r} mode')
+
+        # Initiate the context and prepare simulation parameters
+        debug(f'running {func.__name__} in {mode!r}', prefix='launcher')
         self._step_enter(func, args, kwargs)
-        self._prepare_simulation(args, kwargs, finish_setup=True)
+        self._prepare_simulation(mode, args, kwargs)
+
+        # Call the user-defined model setup method and display the network
+        self.setup_model()
+        State.network.display_neural_connectivity()
+        State.network.display_object_counts()
+        self.hline()
+
+        # Execute the requested simulation loop
         res = self._step_execute(func, args, kwargs, status)
         self._step_exit(func, args, kwargs, status)
         return res
@@ -95,19 +107,19 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         debug_mode(Config.show_debug)  # default to config before init
         super().__init__(**kwargs)
+        self.hline()
         debug_mode(self.show_debug)  # use instance attribute after init
-        self._extra_widgets = []
         self._specfile_init = kwargs.get('specfile')
-        self._prepare_simulation(None, kwargs, finish_setup=False)
+        self._prepare_simulation(RunMode.INTERACT, None, kwargs,
+                finish_setup=False)
 
     def __str__(self):
-        return super().__str__()
+        return AbstractBaseContext.__str__(self)
 
     def printspec(self):
-        self.printf(f'{self!s}')
-        self.newline()
+        self.printf(Specified.__str__(self))
 
-    def _prepare_simulation(self, args, kwargs, finish_setup=True):
+    def _prepare_simulation(self, run_mode, args, kwargs, finish_setup=True):
         """
         Implicit method that prepares for an imminent simulation.
         """
@@ -122,49 +134,61 @@ class SimulatorContext(Specified, AbstractBaseContext):
             try:
                 sfdata = self.read_json(spath)
             except Exception as e:
-                self.debug(spath, prefix='specs ({SPECFILE!r}) not found')
+                self.debug(spath, prefix=f'SpecFileNotFound')
             else:
                 self.update(sfdata)
                 self.out(spath, prefix=f'LoadedSpecFile')
             finally:
                 debug_mode(self.show_debug)
 
+        # Update from an alternative specfile if one was provided
+        specfile = kwargs.pop('specfile', self._specfile_init)
+        found_specfile = None
+        found_specpath = None
+        if specfile:
+            json = self.get_json(specfile)
+            if json is not None:
+                found_specpath, fspecs = json
+                self.update(fspecs)
+                found_specfile = specfile
+                self.out(found_specpath, prefix='LoadedSpecFile')
+
         # Consume keywords for parameters in class attribute `spec`
         spec_keys = list(filter(lambda k: k in self.spec, kwargs.keys()))
         for key in spec_keys:
             setattr(self, key, kwargs.pop(key))
-            self.debug(f'consuming kwarg {key!r} with {getattr(self, key)!r}')
-
-        # Update from an alternative specfile if one was provided
-        specfile = kwargs.pop('specfile', self._specfile_init)
-        if specfile:
-            fpath, fspecs = self.get_json(specfile)
-            self.update(fspecs)
-            self.out(fpath, prefix='LoadedSpecFile')
+            self.debug(f'consumed kwarg {key!r} with {getattr(self, key)!r}')
+        if spec_keys:
+            self.out('Updated {} parameters: {}', len(spec_keys), spec_keys,
+                     prefix='KeywordSpecs')
 
         # Derived values to be updated (e.g., blocksize)
         self.blocksize = int(self.dt_block / self.dt)
 
-        # Final point at which `show_debug` could possibly change
-        debug_mode(self.show_debug)
-
         # Print out the resulting spec parameters
-        self.out(f'Simulation parameters:')
         self.printspec()
 
         # Update global scope and shared state
         specdict = dict(self.items())
+        specdefaults = dict(self.defaults())
+        extra_state = dict(run_mode=run_mode, context=self,
+                           specfile=found_specfile, specpath=found_specpath)
         State.reset()
-        State.update(specdict)
-        self.get_global_scope().update(specdict)
+        State.update(specdict, **extra_state)
+        self.get_global_scope().update(specdict, **extra_state)
+
+        # Final point at which `show_debug` could possibly change
+        debug_mode(self.show_debug)
 
         # Set the RNG seed if a seed key was provided
         if self.rnd_seed:
             self.set_default_random_seed(rnd_seed)
 
         # Write JSON files of current parameter values and defaults
-        self.write_json(specdict, SPECFILE)
-        self.write_json(dict(self.defaults()), DFLTFILE, base='context')
+        sfpath = self.write_json(specdict, SPECFILE)
+        dfpath = self.write_json(specdefaults, DFLTFILE, base='context')
+        self.out(sfpath, prefix='WroteSpecFile')
+        self.out(dfpath, prefix='WroteDefaultsFile')
 
         # We want to process parameter updates and write out defaults and
         # specs files during both construction (__init__) and method calls to
@@ -174,14 +198,11 @@ class SimulatorContext(Specified, AbstractBaseContext):
         if not finish_setup:
             return
 
-        # Display green AnyBar to signal the start of the simulation
-        self.set_anybar_color('green')
-        self.debug(f'State = {State!s}')
-
-        # Initialize the simulation network object and store an instance
-        # attribute reference (n.b., it goes into shared state anyway)
-        State.context = self
+        # Initialize the simulation network object and assign to an instance
+        # attribute (n.b., it goes into shared state anyway)
         self.network = Network()
+        self.set_anybar_color('green')
+        if debug_mode(): self.printf(State)
 
     def load_environment_parameters(self, env):
         """
@@ -215,7 +236,6 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         Simulate the model in batch mode for movie generation.
         """
-        self.setup_model()
         anim = FuncAnimation(
                 fig       = State.simplot.fig,
                 func      = State.network.animation_update,
@@ -239,7 +259,6 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         Simulate the model in batch mode for data collection.
         """
-        self.setup_model()
         while State.recorder:
             State.network.model_update()
 
@@ -247,20 +266,12 @@ class SimulatorContext(Specified, AbstractBaseContext):
         self.set_anybar_color('blue')
         State.recorder.save()
 
-    def add_dashboard_widgets(self, *widgets):
-        """
-        Add extra widgets to be displayed between figure and neurons.
-        """
-        self._extra_widgets.extend(widgets)
-
     @simulate
     def launch_dashboard(self, specfile=None, return_panel=False,
         threaded=False, dpi=Config.screendpi):
         """
         Construct an interactive Panel dashboard for running the model.
         """
-        self.setup_model()
-
         # Main figure Matplotlib pane object will be manually updated
         main_figure = Matplotlib(object=State.simplot.fig, dpi=dpi)
 
@@ -276,7 +287,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         dt_perf = int(1e3)
         tictoc = Markdown('Block -- [-- ms]')
         player = pn.widgets.DiscretePlayer(value='1', options=list(map(str,
-            range(1, max(4, 1+int(self.psim.tracewin/self.psim.calcwin))))),
+            range(1, max(4, 1+int(self.tracewin/self.calcwin))))),
             interval=dt_perf, name='Simulation Control', loop_policy='loop')
 
         # Markdown displays for each registered table output
@@ -320,12 +331,12 @@ class SimulatorContext(Specified, AbstractBaseContext):
         gain_row = pn.Row(
             *[pn.Column(f'### {grp.name} conductances',
                 *grp.get_gain_sliders())
-                    for grp in State.network.neuron_groups])
+                    for grp in State.network.neuron_groups.values()])
 
         neuron_row = pn.Row(
             *[pn.Column(f'### {grp.name} neurons',
                 *grp.get_neuron_sliders())
-                    for grp in State.network.neuron_groups])
+                    for grp in State.network.neuron_groups.values()])
 
         controls = State.network.get_panel_controls(single_column=True)
 
@@ -336,16 +347,17 @@ class SimulatorContext(Specified, AbstractBaseContext):
         control_columns = [pn.Column(gain_row, neuron_row),
                            pn.Column(*last_column)]
 
-        if self._extra_widgets:
-            extra = pn.Column(*self._extra_widgets)
-            control_columns.insert(0, extra)
+        if self._widgets:
+            context_column = pn.WidgetBox('### {self.name}', *self._widgets)
+            control_columns.insert(0, context_column)
 
         panel = pn.Row(
                     pn.WidgetBox(
-                        f'## {self.psim.title}',
+                        f'## {self.title}',
                         main_figure,
                         pn.Row(tictoc, player),
-                        pn.Row('### Model data', *tuple(table_txt.values())),
+                        '### Model data',
+                        pn.Row(*tuple(table_txt.values())),
                     ),
                     *control_columns,
                 )
@@ -353,5 +365,10 @@ class SimulatorContext(Specified, AbstractBaseContext):
         if return_panel:
             return panel
 
-        # Blocking call if threaded == True
-        self.server = panel.show(threaded=threaded)
+        try:
+
+            # Blocking call if threaded == True
+            self.server = panel.show(threaded=threaded)
+
+        except KeyboardInterrupt:
+            pass

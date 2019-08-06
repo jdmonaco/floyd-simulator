@@ -43,3 +43,5 @@ State.figw      = 8
 State.figh      = 6
 State.figdpi    = 144
 State.run_mode  = RunMode.INTERACT
+State.specfile  = 'spec'
+State.specpath  = None

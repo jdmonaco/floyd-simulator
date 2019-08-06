@@ -7,14 +7,14 @@ author ... joseph d. monaco
 in memoriam.
 """
 
-__version__ = "0.1.0"
+VERSION = "0.2.1"
 
 
-from .state    import State
-from .config   import Config
-from .network  import Network
-from .recorder import ModelRecorder
-from .context  import SimulatorContext
+from .state    import *
+from .config   import *
+from .network  import *
+from .recorder import *
+from .context  import *
 from .neurons  import *
 from .synapses import *
 from .input    import *

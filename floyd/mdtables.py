@@ -36,7 +36,7 @@ class MarkdownTable(object):
 
         # Add a row for each neuron group with format specifiers
         self.keys = []
-        for group in State.network.neuron_groups:
+        for group in State.network.neuron_groups.values():
             spec += '**{}**'.format(group.name).ljust(width)
             for i, colname in enumerate(columns):
                 key = '{}_{}'.format(group.name, i)
@@ -51,7 +51,7 @@ class MarkdownTable(object):
         Update the table based on the callback values for neuron groups.
         """
         data = {}
-        for group in State.network.neuron_groups:
+        for group in State.network.neuron_groups.values():
             for i, func in enumerate(self.funcs):
                 key = '{}_{}'.format(group.name, i)
                 data[key] = func(group)

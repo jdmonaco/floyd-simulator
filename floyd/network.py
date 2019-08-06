@@ -2,12 +2,17 @@
 Network representation of groups and pathways as nodes and edges.
 """
 
+__all__ = ['Network']
+
+
 import time
 import functools
 
 import matplotlib.pyplot as plt
 import networkx as nx
 
+from pouty import debug_mode, printf
+from roto.dicts import pprint as dict_pprint
 from tenko.base import TenkoObject
 
 from .state import State, RunMode
@@ -22,18 +27,37 @@ class Network(TenkoObject):
     def __init__(self):
         super().__init__()
 
-        self.neuron_groups = []
-        self._neuron_dict = {}
-        self.synapses = []
-        self._synapses_dict = {}
-        self.stimulators = []
-        self._stimulators_dict = {}
-        self.state_updaters = []
+        self.neuron_groups = {}
+        self.synapses = {}
+        self.stimulators = {}
+        self.state_updaters = {}
         self.buttons = {}
         self.watchers = {}
+        self.counts = dict(neuron_groups=0, synapses=0, stimulators=0,
+                           state_updaters=0)
         self.G = nx.DiGraph()
         State.network = self
         self.debug('network initialized')
+
+    @staticmethod
+    def _get_object_name(obj):
+        """
+        Given an unknown object, find a reasonable name for it.
+        """
+        if hasattr(updater, 'name'):
+            name = updater.name
+        elif hasattr(updater, '__name__'):
+            name = updater.__name__
+        elif hasattr(updater, '__qualname__'):
+            name = updater.__qualname__
+        else:
+            s = str(name)
+            r = repr(name)
+            if len(s) < len(r):
+                name = s
+            else:
+                name = r
+        return name
 
     def get_panel_controls(self, single_column=False):
         """
@@ -43,16 +67,18 @@ class Network(TenkoObject):
         from panel.pane import Markdown
         from panel import Row, Column, WidgetBox
 
-        paramfile_input = TextInput(name='Filename', value='model-params')
+        paramfile_input = TextInput(name='Filename',
+            value='spec' if State.specfile is None else State.specfile)
         notes_input = TextInput(name='Notes',
-                placeholder='Describe the results...')
+            placeholder='Describe the results...')
         notes_txt = Markdown('', height=50)
-        filename_txt = Markdown('')
+        filename_txt = Markdown('' if State.specpath is None else
+                                State.specpath)
         uniquify_box = Checkbox(name='Force unique', value=False)
         save_btn = Button(name='Save', button_type='primary')
         restore_btn = Button(name='Restore', button_type='success')
         defaults_btn = Button(name='Defaults', button_type='warning')
-        zero_btn = Button(name='Zero', button_type='danger')
+        zero_btn = Button(name='Disconnect', button_type='danger')
 
         self.buttons.update(
                 save = save_btn,
@@ -87,11 +113,13 @@ class Network(TenkoObject):
             psavefn = paramfile_input.value
             unique = uniquify_box.value
             params = dict(notes=notes_input.value)
-            for grp in self.neuron_groups:
+            if State.context._widgets:
                 params.update({name:slider.value for name, slider in
-                               grp.g.sliders.items()})
-                params.update({f'{name}_{grp.name}':slider.value
-                               for name, slider in grp.p.sliders.items()})
+                    State.context._widgets.items()})
+            for name, grp in self.neuron_groups.items():
+                grp_params = {name:slider.value for name, slider in
+                              grp._widgets.items()}
+                params[name] = grp_params
             p = State.context.write_json(params, psavefn, base='context',
                     unique=unique)
             filename_txt.object = p
@@ -101,17 +129,22 @@ class Network(TenkoObject):
             State.context.toggle_anybar()
             self.debug('restore button callback')
             psavefn = paramfile_input.value
-            fullpath, params = State.context.get_json(psavefn)
+            json = State.context.get_json(psavefn)
+            if json is None:
+                filename_txt.object = f'**Could not find spec: {psavefn!r}**'
+                return
+            fullpath, params = json
             filename_txt.object = fullpath
             notes_input.value = params.pop('notes', '')
-            for grp in self.neuron_groups:
-                for gname, slider in grp.g.sliders.items():
-                    if gname in params:
-                        slider.value = params[gname]
-                for name, slider in grp.p.sliders.items():
-                    pname = f'{name}_{grp.name}'
-                    if pname in params:
-                        slider.value = params[pname]
+            for grp_name, grp in self.neuron_groups.items():
+                grp_params = params[grp_name]
+                for name, slider in grp._widgets.items():
+                    if name in grp_params:
+                        slider.value = grp_params.pop(name)
+                del params[grp_name]
+            for name, value in params.items():
+                if name in State.context._widgets:
+                    State.context._widgets[name].value = value
 
         @throttle
         def defaults(value):
@@ -122,12 +155,11 @@ class Network(TenkoObject):
         @throttle
         def zero(value):
             State.context.toggle_anybar()
-            self.debug('zero button callback')
-            for grp in self.neuron_groups:
-                for slider in grp.g.sliders.values():
-                    slider.value = 0.0
-                for slider in grp.p.sliders.values():
-                    slider.value = slider.start
+            self.debug('disconnet button callback')
+            for grp in self.neuron_groups.values():
+                for gname in grp.gain_keys:
+                    if gname in grp._widgets:
+                        grp._widgets[gname].value = 0.0
 
         # Add callback functions to the buttons and save the watcher objects
         for name, btn in self.buttons.items():
@@ -137,7 +169,7 @@ class Network(TenkoObject):
         notes_input.link(notes_txt, value='object')
 
         # Create separete columns to construct as a final row or column
-        file_column = Column('### Parameter files', paramfile_input,
+        file_column = Column('### Model spec files', paramfile_input,
                           uniquify_box, filename_txt, notes_input, notes_txt)
         control_column = Column('### Parameter controls',
                              *tuple(self.buttons.values()))
@@ -150,10 +182,9 @@ class Network(TenkoObject):
         """
         Unlink all Panel widgets from their callback functions.
         """
-        for grp in self.neuron_groups:
-            grp.g.unlink_sliders()
-            grp.p.unlink_sliders()
-        State.context.p.unlink_sliders()
+        State.context.unlink_sliders()
+        for grp in self.neuron_groups.values():
+            grp.unlink_widgets()
         for name, button in self.buttons.items():
             button.param.unwatch(self.watchers[name])
 
@@ -183,13 +214,13 @@ class Network(TenkoObject):
         if not State.recorder:
             return
 
-        for updater in self.state_updaters:
+        for updater in self.state_updaters.values():
             updater.updater()
-        for stimulator in self.stimulators:
+        for stimulator in self.stimulators.values():
             stimulator.update()
-        for group in self.neuron_groups:
+        for group in self.neuron_groups.values():
             group.update()
-        for synapses in self.synapses:
+        for synapses in self.synapses.values():
             synapses.update()
 
     def display_update(self):
@@ -204,129 +235,71 @@ class Network(TenkoObject):
         """
         Reset neuron group parameters to parameter defaults.
         """
-        for grp in self.neuron_groups:
+        for grp in self.neuron_groups.values():
             grp.reset()
 
     def add_neuron_group(self, group):
         """
         Add an instance of NeuronGroup to the network.
         """
-        if group in self.neuron_groups:
-            self.out(group.name, prefix='AlreadyInNetwork', warning=True)
+        if group.name in self.neuron_groups:
+            self.out(group.name, prefix='AlreadyDeclared', warning=True)
             return
-        self.neuron_groups.append(group)
-        self._neuron_dict[group.name] = group
+        self.neuron_groups[group.name] = group
         self.G.add_node(group.name, object=group)
-        self.debug(f'added neuron group: {group!s}')
+        self.counts['neuron_groups'] += 1
+        self.debug(f'added neuron group {group.name!r}')
+        if debug_mode(): printf(f'{group!s}')
 
     def add_synapses(self, synapses):
         """
         Add an instance of Synapses to the network.
         """
-        if synapses in self.synapses:
-            self.out(synapses.name, prefix='AlreadyInNetwork', warning=True)
+        if synapses.name in self.synapses:
+            self.out(synapses.name, prefix='AlreadyDeclared', warning=True)
             return
-        self.synapses.append(synapses)
-        self._synapses_dict[synapses.name] = synapses
+        self.synapses[synapses.name] = synapses
         synapses.post.add_synapses(synapses)
         self.G.add_edge(synapses.pre.name, synapses.post.name, object=synapses)
-        self.debug('added synapses: {synapses!s}')
+        self.counts['synapses'] += 1
+        self.debug('added synapses {synapses!r}')
+        if debug_mode(): printf(f'{synapses!s}')
 
     def add_stimulator(self, stim):
         """
         Add an instance of InputStimulator to the network.
         """
-        if stim in self.stimulators:
-            self.out(stimulators.name, prefix='AlreadyInNetwork', warning=True)
+        if stim.name in self.stimulators:
+            self.out(stimulators.name, prefix='AlreadyDeclared', warning=True)
             return
-        self.stimulators.append(stim)
-        self._stimulators_dict[stim.name] = stim
+        self.stimulators[stim.name] = stim
         self.G.add_edge(stim.name, stim.target.name, object=stim)
-        self.debug(f'added stimulator: {stim!s}')
+        self.counts['stimulators'] += 1
+        self.debug(f'added stimulator {stim.name!r} for {stim.target.name!r}')
 
     def add_state_updater(self, updater):
         """
         Add an object that updates the shared state.
         """
-        self.state_updaters.append(updater)
+        if updater in list(self.state_updaters.values()):
+            self.out(updater, prefix='AlreadyDeclared', warning=True)
+            return
+        name = self._get_object_name(updater)
+        self.state_updaters[name] = updater
+        self.counts['state_updaters'] += 1
+        self.debug(f'added state updater {name!r}')
 
     def display_neural_connectivity(self):
         """
         Print out detailed fanin/fanout statistics for each projection.
         """
         self.out.hline()
-        for S in self.synapses:
-            S.connectivity_stats()
+        for synapses in self.synapses.values():
+            synapses.connectivity_stats()
             self.out.hline()
 
-    def get_neuron_group(self, key):
+    def display_object_counts(self):
         """
-        Return the named neuron group object.
+        Display a list of object counts for the current network.
         """
-        return self._neuron_dict[key]
-
-    def group_items(self):
-        """
-        Generator over neuron groups that provides (name, object) tuples.
-        """
-        return self._neuron_dict.items()
-
-    def group_names(self):
-        """
-        Generator over neuron groups that provides group names.
-        """
-        return self._neuron_dict.keys()
-
-    def group_values(self):
-        """
-        Generator over neuron groups that provides group objects.
-        """
-        return self._neuron_dict.values()
-
-    def get_synapses(self, key):
-        """
-        Return the named neuron group object.
-        """
-        return self._synapses_dict[key]
-
-    def synapse_items(self):
-        """
-        Generator over synapses that provides (name, object) tuples.
-        """
-        return self._synapses_dict.items()
-
-    def synapse_names(self):
-        """
-        Generator over synapses that provides synapse names.
-        """
-        return self._synapses_dict.keys()
-
-    def synapse_values(self):
-        """
-        Generator over synapses that provides synapse objects.
-        """
-        return self._synapses_dict.values()
-
-    def get_stimulator(self, key):
-        """
-        Return the named neuron group object.
-        """
-        return self._stimulators_dict[key]
-
-    def stimulator_items(self):
-        """
-        Generator over stimulators that provides (name, object) tuples.
-        """
-        return self._stimulators_dict.items()
-
-    def stimulator_names(self):
-        """
-        Generator over stimulators that provides stimulator names.
-        """
-        return self._stimulators_dict.keys()
-
-    def stimulator_values(self):
-        """
-        Generator over stimulators that provides stimulator objects.
-        """
-        return self._stimulators_dict.values()
+        self.out.printf(dict_pprint(self.counts, name=self.name))

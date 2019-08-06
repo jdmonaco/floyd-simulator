@@ -50,7 +50,7 @@ class InputStimulator(TenkoObject):
         Note: Target should be a BaseUnitGroup subclass. The variable should be
         the name of an array variable or a Param in `target.spec`.
         """
-        super(TenkoObject, self).__init__(name=f'Stim:{variable}')
+        super().__init__(name=f'Stim:{variable}')
         self.target = target
         self.variable = variable
         self.state_key = state_key
@@ -99,6 +99,7 @@ class InputStimulator(TenkoObject):
         self.delivered = 0
         self.exhausted = False
         self.exhausted_printed = False
+        self.last_t_mod = -1
 
         State.network.add_stimulator(self)
 
@@ -117,7 +118,8 @@ class InputStimulator(TenkoObject):
         if self.exhausted:
             if self.exhausted_printed:
                 return
-            self.out(f'Stimulation protocol exhausted (t = {State.t:.3f} ms)')
+            self.out('Stimulation protocol exhausted (t = '
+                    f'{State.t-2*State.dt:.2f} ms)')
             self.exhausted_printed = True
             return
 
@@ -127,6 +129,13 @@ class InputStimulator(TenkoObject):
         nz = (self.t <= t_mod).nonzero()[0]
         if nz.size == 0:
             return
+
+        # Detect the modulo wraparound as a cycle termination signal
+        if t_mod < self.last_t_mod:
+            self.delivered += 1
+            if self.delivered == self.cycles:
+                self.exhausted = True
+        self.last_t_mod = t_mod
 
         # Get the most recent timepoint and elapsed time since it started
         i = nz[-1]
@@ -147,11 +156,5 @@ class InputStimulator(TenkoObject):
 
         # Print message for passing each timepoint
         if i != self.previous:
-            self.debug(f'timepoint: stim({t0:.3f}) = {value!r}')
+            self.debug(f'timepoint {i}/{self.N-1}: stim({t0:.3f}) = {value!r}')
             self.previous = i
-
-        # Determine whether the end of the stimulation protocol was reached
-        if i == self.N - 1:
-            self.delivered += 1
-            if self.delivered == self.cycles:
-                self.exhausted = True

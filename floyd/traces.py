@@ -2,7 +2,7 @@
 Streaming data-trace plots for simulations.
 """
 
-__all__ = ['RealtimeTracesPlot', ]
+__all__ = ['RealtimeTracesPlot']
 
 
 import operator
