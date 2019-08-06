@@ -2,14 +2,14 @@
 Subpackage for simulations defined within floyd itself.
 """
 
-VERSION = '0.2.0'
+VERSION = '0.2.1'
 
 
 import os
 
 import toolbox
 
-from ..context import SimulatorContext, simulate
+from ..context import SimulatorContext, simulate, step
 from ..config import Config
 
 
@@ -27,7 +27,7 @@ RESDIR   = os.path.join(PROJDIR, 'results')
 class FloydContext(SimulatorContext):
     _projname = PROJNAME
     _version  = VERSION
-    _rootdir  = ROOTDIR
+    _rootdir  = PROJDIR
     _datadir  = DATADIR
     _repodir  = REPODIR
     _resdir   = RESDIR

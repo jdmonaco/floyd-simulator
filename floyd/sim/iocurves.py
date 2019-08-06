@@ -6,9 +6,9 @@ from functools import partial
 
 from toolbox.numpy import *
 from roto.plots import shaded_error
+from specify import Param
 
 from . import FloydContext, step
-from ..neurons.gallery import *
 from .. import *
 
 
@@ -18,77 +18,65 @@ class InputOutputCurves(FloydContext):
     Evaluate the f-I curves for Grace and Kechen.
     """
 
-    def setup_model(self, pfile=None, **params):
-        self.set_simulation_parameters(params,
-            title    = f"Analysis of {params['modeltype']}/"
-                       f"{params['neurontype']} Neurons",
-            rnd_seed = None,     # str, RNG seed (None: class name)
-            duration = 5000.0,   # ms, total simulation length
-            dt       = 0.1,      # ms, single-update timestep
-            dt_rec   = 0.1,      # ms, recording sample timestep
-            dt_block = 25.0,     # ms, dashboard update timestep
-            figw     = 9.0,      # inches, main figure width
-            figh     = 9.0,      # inches, main figure height
-            tracewin = 100.0,    # ms, trace plot window
-            calcwin  = 50.0,     # ms, rolling calculation window
-            run_mode = 'record', # run in data collection mode
-            debug    = False,    # run in debug mode
-        )
-        self.set_model_parameters(params, pfile=pfile,
-            N_pulses    = 33,     # number of test pulses
-            N_ex_cells  = 5,      # number of examples cells for traces
-            max_current = 1000.0, # pA, peak pulse stimulation
-            modeltype   = 'LIF',  # 'LIF', 'AdEx'
-            neurontype  = 'int',  # 'int', 'pyr'
-            CA_spacing  = 0.031,  # mm, 0.1 cf. Taxidis
-            CA_radius   = 0.220,  # mm, CA3/1 disc radius
-            sigma       = 0.0,
-            g_tonic_exc = 0.0,
-            g_tonic_inh = 0.0,
-        )
+    # Simulation parameters
+    title      = "Input/Output Analysis of Neurons"
+    duration   = 5000.0   # ms total simulation length
+    dt         = 0.1      # ms single-update timestep
+    dt_rec     = 0.1      # ms recording sample timestep
+    dt_block   = 25.0     # ms dashboard update timestep
+    figw       = 9.0      # inches main figure width
+    figh       = 9.0      # inches main figure height
+    tracewin   = 100.0    # ms trace plot window
+    calcwin    = 50.0     # ms rolling calculation window
+    show_debug = True     # run in debug mode
 
-        # Create the hexagonal disc layout for the group
-        layout = HexagonalDiscLayout(
-            scale       = CA_spacing,
-            radius      = CA_radius,
-            origin      = (CA_radius,)*2,
-            extent      = (0, 2*CA_radius, 0, 2*CA_radius),
-            orientation = pi/6,
-        )
+    # Model parameters
+    N           = Param(default=100, doc='number of neurons')
+    N_pulses    = Param(default=33, doc='number of test pulses')
+    N_ex_cells  = Param(default=5, doc='number of examples cells for traces')
+    max_current = Param(default=1e3, units='pA', doc='peak pulse stimulation')
+    modeltype   = Param(default='Brette_AEIF', doc="'LIF'|'AEIF'")
+    neurontype  = Param(default='pyr', doc="'int'|'pyr'")
+    I_noise     = Param(default=0.0, doc='noisy input current gain')
+    g_tonic_exc = Param(default=6.0, doc='noisy excitatory input conductance')
+    g_tonic_inh = Param(default=9.0, doc='noisy inhibitory input conductance')
+
+    def setup_model(self):
 
         # Create the neuron group based on model and neuron types
         params = dict(
-                sigma       = sigma,
+                N           = N,
+                name        = 'IOGroup',
+                I_noise     = I_noise,
                 g_tonic_exc = g_tonic_exc,
                 g_tonic_inh = g_tonic_inh,
-                layout      = layout
         )
         key = (modeltype, neurontype)
         if key == ('LIF', 'int'):
-            group = create_LIF_interneurons(**params)
+            group = DonosoLIFInterneurons(**params)
         elif key == ('LIF', 'pyr'):
-            group = create_LIF_pyramids(**params)
-        elif key == ('AdEx', 'int'):
-            group = create_AdEx_interneurons(**params)
-        elif key == ('Malerba_AdEx', 'pyr'):
-            group = create_Malerba_AdEx_pyramids(**params)
-        elif key == ('Brette_AdEx', 'pyr'):
-            group = create_Brette_AdEx_pyramids(**params)
+            group = DonosoLIFPyramids(**params)
+        elif key == ('AEIF', 'int'):
+            group = MalerbaAEIFInterneurons(**params)
+        elif key == ('Malerba_AEIF', 'pyr'):
+            group = MalerbaAEIFPyramids(**params)
+        elif key == ('Brette_AEIF', 'pyr'):
+            group = BretteAEIFPyramids(**params)
         else:
             raise ValueError(f'unknown neuron model: {key!r}')
 
         # Initialize voltage and hetergeneous excitability
-        group.set_pulse_metrics()
         group.set(
-                v = group.p.E_L,
+                v = group.E_L,
                 excitability = PositiveGaussianSampler(1.0, 0.1),
         )
 
         # Create the step-pulse DC-current stimulator
         pulses = step_pulse_series(N_pulses, duration, max_current)
-        stim = InputStimulator(group, 'I_DC_mean', *pulses,
-                               state_key='I_app', repeat=True)
-        if self.current_step() == 'collect_data':
+        stim = InputStimulator(group, 'I_DC_mean', *pulses, state_key='I_app',
+                               repeat=3)
+
+        if State.run_mode == RunMode.RECORD:
             self.save_array(pulses, 'stimulus_series')
 
         # Create the model recorder, figure, and tables
@@ -115,8 +103,8 @@ class InputOutputCurves(FloydContext):
                 rate    = simplot.gs[1,0],
                 net     = simplot.gs[1,1],
         )
-        simplot.get_axes('voltage').set_ylim(group.p.E_inh - 10,
-                                             group.p.V_thr + 20)
+        simplot.get_axes('voltage').set_ylim(group.E_inh - 10,
+                                             group.V_thr + 20)
 
         # Initialize stimulation current trace plot
         simplot.add_realtime_traces_plot(
@@ -152,7 +140,6 @@ class InputOutputCurves(FloydContext):
 
         # Register figure initializer to add artists to the figure
         def init_figure():
-            self.debug('init_figure called')
             simplot.draw_borders()
             netgraph.plot()
             return simplot.get_all_artists()
@@ -164,7 +151,7 @@ class InputOutputCurves(FloydContext):
         Plot a simple figure of spiking and voltage traces.
         """
         fig = self.figure('iocurves', clear=True, figsize=(11,3.7),
-                title=f'Stepped Series Stimulation of {self.p.groupname}')
+                title=f'Stepped Series Stimulation of {self.groupname}')
 
         t = self.read_array('t', step='collect_data')
         v = self.read_array('v', step='collect_data')
@@ -253,7 +240,7 @@ class InputOutputCurves(FloydContext):
         self.out('Plotting f-I curves...')
         fig = self.figure('iocurves', clear=True, figsize=(6, 5),
                 title=r'Rate vs. $I_{\rm app}$ for '
-                      f'{self.p.modeltype}/{self.p.neurontype}')
+                      f'{self.modeltype}/{self.neurontype}')
         ax = fig.add_subplot()
         ax.plot(I_stim[:-1], fI, 'k-', lw=0.6, alpha=0.15, zorder=-10)
         ax.plot(I_stim[:-1], fI_mean, 'b-', lw=1.2, alpha=0.8, zorder=10,
@@ -267,5 +254,5 @@ class InputOutputCurves(FloydContext):
         ax.set(xlabel=r'$I_{\rm app}$, pA', ylabel='Mean firing rate, sp/s')
 
         # Save the figure
-        self.savefig(tag=f'{self.p.modeltype}_{self.p.neurontype}',
+        self.savefig(tag=f'{self.modeltype}_{self.neurontype}',
                 tight_padding=0.2)
