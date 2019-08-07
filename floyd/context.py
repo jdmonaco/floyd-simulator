@@ -158,7 +158,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
             setattr(self, key, kwargs.pop(key))
             self.debug(f'consumed kwarg {key!r} with {getattr(self, key)!r}')
         if spec_keys:
-            self.out('Updated {} parameter spec values', prefix='KeywordSpecs')
+            self.out(f'Updated {len(spec_keys)} parameter values',
+                     prefix='KeywordSpecs')
 
         # Derived values to be updated (e.g., blocksize)
         self.blocksize = int(self.dt_block / self.dt)

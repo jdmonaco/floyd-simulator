@@ -26,16 +26,17 @@ class Synapses(Specified, BaseUnitGroup):
 
     base_variables = ('C', 'S', 't_spike', 'dt_spike', 'g', 'g_peak', 'p_r')
 
-    def __init__(self, pre, post, **kwargs):
+    def __init__(self, pre, post, *, seed=None, **kwargs):
         self._initialized = False
         super().__init__(name=f'{pre.name}->{post.name}', N=(post.N, pre.N),
                 **kwargs)
 
         self.E_syn = post.E_syn[self.transmitter]
-        self.s = scale_constant(self)
+        self.s = self.scale_constant()
         self.pre = pre
         self.post = post
         self.recurrent = pre is post
+        self.set_random_seed(seed)
 
         self.delay = None
         self.g_peak = self.g_max
@@ -44,11 +45,21 @@ class Synapses(Specified, BaseUnitGroup):
         self.g_total = zeros(post.N, 'f')
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
-        self.out('{} = {:.4g} mV', self.name, self.postsynaptic_potential(),
-                prefix='PostSynPotential')
+        self.out('{} = {:.4g} mV', self.name,
+                self.postsynaptic_potential().mean(), prefix='PostPotential')
 
-        State.network.add_synapses(self)
+        if 'network' in State:
+            State.network.add_synapses(self)
         self._initialized = True
+
+    def set_random_seed(self, seed):
+        """
+        Set random seed on `rnd` RandomState instance attribute from string.
+        """
+        seed = self.name if seed is None else seed
+        self._rand_seed = sum(list(map(ord, seed)))
+        self.rnd = np.random.RandomState(seed=self._rand_seed)
+        self.out(f'{self._rand_seed} [key: \'{seed}\']')
 
     def scale_constant(self):
         """
@@ -65,7 +76,7 @@ class Synapses(Specified, BaseUnitGroup):
         delta = arange(0, self.tau_max + State.dt, State.dt)
         g_t = exp(-delta/self.tau_d) - exp(-delta/self.tau_r)
         s = 1 / g_t.max()
-        dV = self.g_max * s * trapz(g_t, dx=State.dt) * (
+        dV = self.g_peak * s * trapz(g_t, dx=State.dt) * (
                                 self.E_syn - self.post.E_L) / self.post.C_m
         return dV
 

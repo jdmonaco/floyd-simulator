@@ -114,7 +114,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         self.E_syn = dict(GABA=self.E_inh, AMPA=self.E_exc,
                 NMDA=self.E_exc, glutamate=self.E_exc, L=self.E_exc)
 
-        State.network.add_neuron_group(self)
+        if 'network' in State:
+            State.network.add_neuron_group(self)
 
     def _add_gain_spec(self, gname, value):
         """
@@ -135,7 +136,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         else:
             new_param.default = copy.deepcopy(value)
 
-        self._add_param(gname, new_param)
+        self.__class__._add_param(gname, new_param)
         self.__dict__[new_param.attrname] = copy.deepcopy(new_param.default)
         self.gain_keys.append(gname)
         self.debug('added gain {gname!r} with value {new_param.default!r}')
