@@ -100,7 +100,8 @@ class SimulationPlotter(TenkoObject):
         [updater() for _, updater in self.plots]
         [rtp.update_plots() for rtp in self.traceplots]
         if State.run_mode == RunMode.INTERACT or self.network_graph_in_fig:
-            self.network_graph.update()
+            if self.network_graph is not None:
+                self.network_graph.update()
         return self.fig
 
     @block_record_mode

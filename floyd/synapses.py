@@ -7,6 +7,7 @@ __all__ = ['Synapses', ]
 
 from toolbox.numpy import *
 from specify import Specified, Param
+from roto.dicts import midlite, pprint as dict_pprint
 
 from .matrix import pairwise_distances as distances
 from .groups import BaseUnitGroup
@@ -80,26 +81,26 @@ class Synapses(Specified, BaseUnitGroup):
                                 self.E_syn - self.post.E_L) / self.post.C_m
         return dV
 
-    def connectivity_stats(self):
+    def display_connectivity(self):
         """
-        Display a list of connectivity statistics.
+        Display the parameters and connectivity statistics for these synapses.
         """
         if not hasattr(self, 'active_post'):
             raise RuntimeError('synapses must be connected first!')
 
         msd = lambda x: '{:.3g} +/- {:.3g}'.format(np.nanmean(x), np.nanstd(x))
-        stats = [str(self)]
-        stats += ['connectivity fraction = {:.3f}'.format(
-                    float(self.N/(self.pre.N*self.post.N)))]
-        stats += [f'fanout cells = {msd(self.fanout)}']
-        stats += [f'fanin cells = {msd(self.fanin)}']
-        stats += [f'fanout contacts = {msd(self.S.sum(axis=0))}']
-        stats += [f'fanin contacts = {msd(self.S.sum(axis=1))}']
         nz = self.fanin.nonzero()
-        stats += ['contacts/connection = {}'.format(
-                  msd(self.S.sum(axis=1)[nz]/self.fanin[nz]))]
-
-        self.out('\n'.join(stats))
+        stats = dict(
+                connectivity_fraction = '{:.3f}'.format(
+                                    float(self.N/(self.pre.N*self.post.N))),
+                fanout_cells = f'{msd(self.fanout)}',
+                fanin_cells = f'{msd(self.fanin)}',
+                fanout_contacts = f'{msd(self.S.sum(axis=0))}',
+                fanin_contacts = f'{msd(self.S.sum(axis=1))}',
+                contacts_per_connection = '{}'.format(
+                                  msd(self.S.sum(axis=1)[nz]/self.fanin[nz])),
+        )
+        self.out.printf(dict_pprint(stats, name=f'Connectivity({self.name})'))
 
     def set_delays(self, cond_velocity=0.5):
         """

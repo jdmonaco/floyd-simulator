@@ -158,7 +158,7 @@ class NetworkGraph(TenkoObject):
             post = S.post.name
             pre = S.pre.name
             syn_strength.append(
-                S.post.g[f'g_{post}_{pre}'] * S.fanin.mean() * S.g_max)
+                S.post[f'g_{post}_{pre}'] * S.fanin.mean() * S.g_peak.mean())
         syn_strength = array(syn_strength)
         syn_mu = syn_strength.mean()
         syn_sigma = syn_strength.std()

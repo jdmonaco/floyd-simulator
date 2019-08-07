@@ -67,9 +67,9 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         # run mode, generators are used to provide continuous noise.
         self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise, seed=self.name)
         self.oup_exc = OUNoiseProcess(N=self.N, tau=self.tau_noise_exc,
-                seed=self.name+'_excitatory')
+                seed=self.name+'_excitatory', nonnegative=True)
         self.oup_inh = OUNoiseProcess(N=self.N, tau=self.tau_noise_inh,
-                seed=self.name+'_inhibitory')
+                seed=self.name+'_inhibitory', nonnegative=True)
         if State.run_mode == RunMode.INTERACT:
             self.eta_gen = self.oup.generator()
             self.eta_gen_exc = self.oup_exc.generator()
@@ -139,7 +139,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         self.__class__._add_param(gname, new_param)
         self.__dict__[new_param.attrname] = copy.deepcopy(new_param.default)
         self.gain_keys.append(gname)
-        self.debug('added gain {gname!r} with value {new_param.default!r}')
+        self.debug(f'added gain {gname!r} with value {new_param.default!r}')
 
     def add_synapses(self, synapses):
         """
@@ -165,10 +165,10 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         # Gain spec names take the form `g_<post.name>_<pre.name>`.
 
         if gname in self.gain_keys:
-            self.debug('gain spec {gname!r} exists for {synapses.name!r}')
+            self.debug(f'gain spec {gname!r} exists for {synapses.name!r}')
         else:
             self._add_gain_spec(gname, 1.0)
-            self.debug('added gain spec {gname!r} for {synapses.name!r}')
+            self.debug(f'added gain spec {gname!r} for {synapses.name!r}')
 
     def update(self):
         """
@@ -271,6 +271,12 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         Return the mean firing rate in the calculation window.
         """
         return self.activity.get_mean_rate()
+
+    def active_mean_rate(self):
+        """
+        Return the mean firing rate of neurons active the calculation window.
+        """
+        return self.activity.get_active_mean_rate()
 
     def active_fraction(self):
         """

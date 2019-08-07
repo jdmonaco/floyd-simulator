@@ -19,19 +19,21 @@ from .state import State
 
 class OUNoiseProcess(Specified, AutomaticCache, TenkoObject):
 
-    N = Param(default=1, doc='number of noise signals')
-    tau = Param(default=10.0, doc='time-constant of noise filter')
-    rand_init = Param(default=True, doc='random initialization')
-    seed = Param(default=__name__, doc='string, seed key for RNG state')
+    N = Param(1, doc='number of noise signals')
+    tau = Param(10.0, doc='time-constant of noise filter')
+    rand_init = Param(True, doc='random initialization')
+    seed = Param(__name__, doc='string, seed key for RNG state')
+    nonnegative = Param(False, doc='force non-negative outputs from process')
 
     _data_root = 'noise'
-    _key_params = ('N', 'tau', 'rand_init', 'seed', 'duration', 'dt')
+    _key_params = ('N', 'tau', 'rand_init', 'seed', 'nonnegative', 'duration',
+                   'dt')
     _cache_attrs = ('t', 'eta')
     _save_attrs = ('Nt', 'std')
 
-    def __init__(self, **specs):
+    def __init__(self, **kwargs):
         super().__init__(spec_produce=self._key_params,
-                         duration=State.duration, dt=State.dt, **specs)
+                         duration=State.duration, dt=State.dt, **kwargs)
 
     def _compute(self):
         """
@@ -53,6 +55,8 @@ class OUNoiseProcess(Specified, AutomaticCache, TenkoObject):
         for i in range(1, self.Nt):
             y = eta[:,i-1]
             eta[:,i] = y - y*dt/tau + randn[:,i]*sqrt_dt/tau
+            if self.nonnegative:
+                eta[eta[:,i]<0,i] = 0.0
             self.progressbar(i)
         printf('\n')
 
@@ -77,6 +81,8 @@ class OUNoiseProcess(Specified, AutomaticCache, TenkoObject):
             y = eta[:]
             randn = self.rnd.standard_normal(size=self.N)
             eta[:] = y - y*dt/tau + randn*sqrt_dt/tau
+            if self.nonnegative:
+                eta[eta<0] = 0.0
             yield eta / self.std
 
     def progressbar(self, n, filled=False, color='ochre', width=80):

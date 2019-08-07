@@ -60,7 +60,8 @@ class ModelRecorder(TenkoObject):
                      State.show_debug or State.run_mode == RunMode.INTERACT)
 
         # Recording time tracking
-        self.ts_rec = np.arange(0, State.duration + State.dt_rec, State.dt_rec)
+        ts_rec = np.arange(0, State.duration + State.dt_rec, State.dt_rec)
+        self.ts_rec = ts_rec[ts_rec <= State.duration]
         self.N_t_rec = len(self.ts_rec)
         self.n_rec = -1  # recording frame index
         self.t_rec = -State.dt_rec
@@ -198,8 +199,10 @@ class ModelRecorder(TenkoObject):
             return
         if not self:
             State.context.hline()
-            self.out(f'Simulation complete (n = {State.n - 1:g} frames)',
-                     anybar='green')
+            compl_msg = f'Simulation complete: n = {State.n - 1:g} frames'
+            if State.run_mode == RunMode.RECORD:
+                compl_msg += f'; n_rec = {self.N_t_rec:g} samples'
+            self.out(compl_msg, anybar='green')
             return
         if State.n == 0:
             State.context.hline()

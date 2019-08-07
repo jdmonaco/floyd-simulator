@@ -262,7 +262,7 @@ class Network(TenkoObject):
         synapses.post.add_synapses(synapses)
         self.G.add_edge(synapses.pre.name, synapses.post.name, object=synapses)
         self.counts['synapses'] += 1
-        self.debug('added synapses {synapses!r}')
+        self.debug(f'added synapses {synapses!r}')
         if debug_mode(): printf(f'{synapses!s}')
 
     def add_stimulator(self, stim):
@@ -289,14 +289,21 @@ class Network(TenkoObject):
         self.counts['state_updaters'] += 1
         self.debug(f'added state updater {name!r}')
 
-    def display_neural_connectivity(self):
+    def deisplay_neuron_groups(self):
         """
-        Print out detailed fanin/fanout statistics for each projection.
+        Print out detailed parameters for neuron groups.
         """
-        if self.synapses:
+        for group in self.neuron_groups.values():
+            self.out.printf(group)
             self.out.hline()
+
+    def display_projections(self):
+        """
+        Print out detailed parameters and connection statistics for synapses.
+        """
         for synapses in self.synapses.values():
-            synapses.connectivity_stats()
+            self.out.printf(synapses)
+            synapses.display_connectivity()
             self.out.hline()
 
     def display_object_counts(self):

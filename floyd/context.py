@@ -57,7 +57,9 @@ def simulate(func=None, *, mode=None):
 
         # Call the user-defined model setup method and display the network
         self.setup_model()
-        State.network.display_neural_connectivity()
+        State.context.hline()
+        State.network.deisplay_neuron_groups()
+        State.network.display_projections()
         State.network.display_object_counts()
 
         # Execute the requested simulation loop
@@ -164,8 +166,9 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # Derived values to be updated (e.g., blocksize)
         self.blocksize = int(self.dt_block / self.dt)
 
-        # Print out the resulting spec parameters
-        self.printspec()
+        # Print out the resulting spec parameters if this is the actual run
+        if finish_setup:
+            self.printspec()
 
         # Update global scope and shared state
         specdict = dict(self.items())
