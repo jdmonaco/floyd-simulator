@@ -289,7 +289,7 @@ class Network(TenkoObject):
         self.counts['state_updaters'] += 1
         self.debug(f'added state updater {name!r}')
 
-    def deisplay_neuron_groups(self):
+    def display_neuron_groups(self):
         """
         Print out detailed parameters for neuron groups.
         """

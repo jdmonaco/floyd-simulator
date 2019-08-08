@@ -188,6 +188,6 @@ class NetworkGraph(TenkoObject):
             S = attrs['object']
             arrow = self.arrows[i]
             if sigma == 0.0:
-                arrow.set_linewidth(lw)
+                arrow.set_linewidth(self.lw)
                 continue
             arrow.set_linewidth(self.lw * (W[i] - mu) / sigma)

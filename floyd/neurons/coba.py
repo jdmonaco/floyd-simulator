@@ -101,12 +101,11 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         # Initialize metrics and variables
         self.activity = FiringRateWindow(self)
         self.set_pulse_metrics()  # uses default pulse curves
+        self.excitability = 1.0
         self.v = self.E_L
         if self.layout:
             self.x = self.layout.x
             self.y = self.layout.y
-        else:
-            self.x = self.y = 0.0
         self.t_spike = -inf
         self.LFP_uV = 0.0  # uV, LFP signal from summed net synaptic input
 
@@ -186,7 +185,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         """
         Evolve the membrane voltage for neurons according to input currents.
         """
-        self.v += (State.dt / self.C_m) * self.I_net
+        self.v += (State.dt / self.C_m) * (self.I_leak + self.I_net)
 
     def update_spiking(self):
         """
@@ -236,8 +235,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         self.I_total_inh = self.g_total_inh * (self.E_inh - self.v)
         self.I_proxy     = self.I_noise * self.eta
         self.I_app       = self.I_DC_mean * self.excitability
-        self.I_net       = self.I_leak + self.I_app + self.I_proxy + \
-                               self.I_total_exc + self.I_total_inh
+        self.I_net       = self.I_app + self.I_proxy + \
+                           self.I_total_exc + self.I_total_inh
 
     def update_noise(self):
         """

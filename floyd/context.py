@@ -58,7 +58,7 @@ def simulate(func=None, *, mode=None):
         # Call the user-defined model setup method and display the network
         self.setup_model()
         State.context.hline()
-        State.network.deisplay_neuron_groups()
+        State.network.display_neuron_groups()
         State.network.display_projections()
         State.network.display_object_counts()
 

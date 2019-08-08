@@ -99,7 +99,7 @@ class RealtimeTracesPlot(TenkoObject):
             if updater is not None:
                 self.updaters[name] = updater
 
-            # Comained shared and axes-specific format dicts
+            # Combined shared and axes-specific format dicts
             trace_fmt['label'] = name
             self.fmt[name] = {}
             if fmt is not None:
