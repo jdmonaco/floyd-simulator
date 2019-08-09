@@ -5,7 +5,8 @@ Base class for current-based rate-coding neuron groups.
 from functools import partial
 
 from toolbox.numpy import *
-from specify import Param, Slider, Specified, is_param
+from specify import Param, Slider, LogSlider, Specified, is_param
+from specify.utils import get_all_slots
 
 from ..noise import OUNoiseProcess
 from ..groups import BaseUnitGroup
@@ -25,10 +26,12 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
                       'excitability', 'I_app', 'I_net', 'I_leak',
                       'I_total_inh', 'I_total_exc', 'I_proxy')
 
-    def __init__(self, *, name, N, g_end=10.0, g_step=0.1, **kwargs):
+    def __init__(self, *, name, N, g_log_range=(-5, 5), g_step=0.05, **kwargs):
         """
-        Construct the neuron group by computing layouts and noise.
+        Construct rate-based neuron groups.
         """
+        self._initialized = False
+        self.N = N
         super().__init__(name=name, N=N, **kwargs)
 
         # Set up the intrinsic noise inputs (current-based only for rate-based
@@ -49,8 +52,8 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
 
         # Add any conductance gain values in the shared context as Params
         self.gain_keys = []
-        self.gain_param_base = Slider(default=1.0, start=0.0, end=g_end,
-                step=g_step, units='nS')
+        self.gain_param_base = LogSlider(default=0.0, start=g_log_range[0],
+                end=g_log_range[1], step=g_step, units='nS')
         for k, v in vars(State.context.__class__).items():
             if k.startswith(f'g_{name}_'):
                 self._add_gain_spec(k, v)
@@ -58,11 +61,15 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         # Initialize metrics and variables
         self.r = self.r_rest
 
+        # Create the activation nonlinearity
+        self.F = lambda r: self.r_max * (1 + tanh(r/self.r_max)) / 2
+
         # Map from transmitters to reversal potentials
         self.E_syn = dict(GABA=self.E_inh, AMPA=self.E_exc,
                 NMDA=self.E_exc, glutamate=self.E_exc, L=self.E_exc)
 
-        State.network.add_neuron_group(self)
+        if 'network' in State:
+            State.network.add_neuron_group(self)
 
     def _add_gain_spec(self, gname, value):
         """
@@ -72,20 +79,23 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         _, post, pre = gname.split('_')
         new_param = copy.copy(self.gain_param_base)
         new_param.doc = f'{pre}->{post} max conductance'
+        new_all_slots = get_all_slots(type(new_param))
 
         if is_param(value):
-            for k in value.__slots__:
-                if k in new_param.__slots__ and getattr(value, k) is not None:
+            old_all_slots = get_all_slots(type(value))
+            for k in old_all_slots:
+                if hasattr(value, k) and getattr(value, k) is not None and \
+                        k in new_all_slots:
                     slotval = copy.copy(getattr(value, k))
                     object.__setattr__(new_param, k, slotval)
             value = new_param.default
         else:
             new_param.default = copy.deepcopy(value)
 
-        self._add_param(gname, new_param)
+        self.__class__._add_param(gname, new_param)
         self.__dict__[new_param.attrname] = copy.deepcopy(new_param.default)
         self.gain_keys.append(gname)
-        self.debug('added gain {gname!r} with value {new_param.default!r}')
+        self.debug(f'added gain {gname!r} with value {new_param.default!r}')
 
     def add_synapses(self, synapses):
         """
@@ -106,15 +116,15 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
 
         # Check whether the conductance gain spec has already been found in the
         # shared context. If not, then add a new Param to the spec with a
-        # default value of 1.0.
+        # default value of 0.0 (log10(1)).
         #
         # Gain spec names take the form `g_<post.name>_<pre.name>`.
 
         if gname in self.gain_keys:
-            self.debug('gain spec {gname!r} exists for {synapses.name!r}')
+            self.debug(f'gain spec {gname!r} exists for {synapses.name!r}')
         else:
-            self._add_gain_spec(gname, 1.0)
-            self.debug('added gain spec {gname!r} for {synapses.name!r}')
+            self._add_gain_spec(gname, 0.0)
+            self.debug(f'added gain spec {gname!r} for {synapses.name!r}')
 
     def update(self):
         """
@@ -126,9 +136,11 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
 
     def update_rates(self):
         """
-        Evolve the membrane voltage for neurons according to input currents.
+        Evolve the neuronal firing rate variable according to input currents.
         """
-        self.r += (State.dt / self.tau_m) * self.I_net
+        self.r = self.F(self.r + (State.dt / self.tau_m) * (self.I_leak +
+                        self.I_net))
+        self.r[self.r<0] = 0.0
 
     def update_currents(self):
         """
@@ -138,15 +150,15 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         self.I_total_inh = 0.0
 
         for gname in self.S_exc.keys():
-            self.I_total_exc += self[gname] * self.S_exc[gname].I_total
+            self.I_total_exc += 10**self[gname] * self.S_exc[gname].I_total
         for gname in self.S_inh.keys():
-            self.I_total_inh -= self[gname] * self.S_inh[gname].I_total
+            self.I_total_inh -= 10**self[gname] * self.S_inh[gname].I_total
 
-        self.I_leak      = self.r_rest - self.r
-        self.I_proxy     = self.I_noise * self.eta
-        self.I_app       = self.I_DC_mean * self.excitability
-        self.I_net       = self.I_leak + self.I_proxy + self.I_app + \
-                               self.I_total_exc + self.I_total_inh
+        self.I_leak  = self.r_rest - self.r
+        self.I_proxy = self.I_noise * self.eta
+        self.I_app   = self.I_DC_mean * self.excitability
+        self.I_net   = self.I_proxy + self.I_app + self.I_total_exc + \
+                           self.I_total_inh
 
     def update_noise(self):
         """
@@ -213,11 +225,10 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         """
         Return a tuple of Panel FloatSlider objects for neuron Param values.
         """
-        neuron_keys = [k for k in self if k not in self.gain_keys]
-        return self.widgets(*neuron_keys)
+        return self.get_widgets(exclude=self.gain_keys)
 
     def get_gain_sliders(self):
         """
         Return a tuple of Panel FloatSlider objects for gain Param values.
         """
-        return self.widgets(*self.gain_keys)
+        return self.get_widgets(include=self.gain_keys)

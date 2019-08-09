@@ -289,6 +289,42 @@ class Network(TenkoObject):
         self.counts['state_updaters'] += 1
         self.debug(f'added state updater {name!r}')
 
+    def new_neuron_groups(self, *groupnames, *, nrnclass, **specs):
+        """
+        Create a batch of neuron groups of a particular class using the given
+        keyword specs and add them to the network.
+        """
+        if not groupnames:
+            return
+        self.out.hline()
+        for name in groupnames:
+            group = nrnclass(name, **specs)
+            if name not in self.neuron_groups:
+                self.add_neuron_group(group)
+                self.debug(f'group {name!r} did not add itself to network')
+            self.out.printf(group)
+            self.out.hline()
+
+    def new_synaptic_projections(self, *prepost, *, synclass, **specs):
+        """
+        Create a batch of synaptic projections of a particular class using the
+        given keyword specs and add them to the network.
+        """
+        if not prepost:
+            return
+        self.out.hline()
+        for pre, post in prepost:
+            if type(pre) is str:
+                pre = self.neuron_groups[pre]
+            if type(post) is str:
+                post = self.neuron_groups[post]
+            synapses = synclass(name, **specs)
+            if name not in self.neuron_groups:
+                self.add_neuron_group(group)
+                self.debug(f'group {name!r} did not add itself to network')
+            self.out.printf(group)
+            self.out.hline()
+
     def display_neuron_groups(self):
         """
         Print out detailed parameters for neuron groups.

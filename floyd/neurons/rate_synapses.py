@@ -14,7 +14,7 @@ from ..synapses import Synapses
 class RateSynapses(Synapses):
 
     transmitter = 'glutamate'
-    I_max       = Slider(default=1e1, start=0.0, end=1e3, step=1.0, doc='maximum synaptic current input')
+    I_max       = Slider(default=1.0, start=0.0, end=1e1, step=1.0, doc='maximum synaptic current input')
 
     base_variables = ('C', 'S', 'I', 'I_peak')
 
