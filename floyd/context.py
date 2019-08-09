@@ -293,8 +293,9 @@ class SimulatorContext(Specified, AbstractBaseContext):
 
         # Markdown displays for each registered table output
         table_txt = {}
-        for name, table in State.tablemaker:
-            table_txt[name] = Markdown(table)
+        if 'tablemaker' in State:
+            for name, table in State.tablemaker:
+                table_txt[name] = Markdown(table)
 
         def simulation(*events):
             nonlocal dt_perf
@@ -349,7 +350,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
                            pn.Column(*last_column)]
 
         if self._widgets:
-            context_column = pn.WidgetBox('### {self.name}', *self._widgets)
+            context_column = pn.WidgetBox(
+                        f'### {self.name}', *self._widgets.values())
             control_columns.insert(0, context_column)
 
         panel = pn.Row(
