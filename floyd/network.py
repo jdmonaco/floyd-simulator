@@ -44,12 +44,12 @@ class Network(TenkoObject):
         """
         Given an unknown object, find a reasonable name for it.
         """
-        if hasattr(updater, 'name'):
-            name = updater.name
-        elif hasattr(updater, '__name__'):
-            name = updater.__name__
-        elif hasattr(updater, '__qualname__'):
-            name = updater.__qualname__
+        if hasattr(obj, 'name'):
+            name = obj.name
+        elif hasattr(obj, '__name__'):
+            name = obj.__name__
+        elif hasattr(obj, '__qualname__'):
+            name = obj.__qualname__
         else:
             s = str(name)
             r = repr(name)
@@ -215,7 +215,7 @@ class Network(TenkoObject):
             return
 
         for updater in self.state_updaters.values():
-            updater.updater()
+            updater.update()
         for stimulator in self.stimulators.values():
             stimulator.update()
         for group in self.neuron_groups.values():
@@ -289,7 +289,7 @@ class Network(TenkoObject):
         self.counts['state_updaters'] += 1
         self.debug(f'added state updater {name!r}')
 
-    def new_neuron_groups(self, *groupnames, *, nrnclass, **specs):
+    def new_neuron_groups(self, *groupnames, nrnclass, **specs):
         """
         Create a batch of neuron groups of a particular class using the given
         keyword specs and add them to the network.
@@ -298,14 +298,14 @@ class Network(TenkoObject):
             return
         self.out.hline()
         for name in groupnames:
-            group = nrnclass(name, **specs)
+            group = nrnclass(name=name, **specs)
             if name not in self.neuron_groups:
                 self.add_neuron_group(group)
                 self.debug(f'group {name!r} did not add itself to network')
             self.out.printf(group)
             self.out.hline()
 
-    def new_synaptic_projections(self, *prepost, *, synclass, **specs):
+    def new_synaptic_projections(self, *prepost, synclass, **specs):
         """
         Create a batch of synaptic projections of a particular class using the
         given keyword specs and add them to the network.
@@ -318,12 +318,64 @@ class Network(TenkoObject):
                 pre = self.neuron_groups[pre]
             if type(post) is str:
                 post = self.neuron_groups[post]
-            synapses = synclass(name, **specs)
-            if name not in self.neuron_groups:
-                self.add_neuron_group(group)
-                self.debug(f'group {name!r} did not add itself to network')
-            self.out.printf(group)
+            synapses = synclass(pre, post, **specs)
+            if synapses.name not in self.synapses:
+                self.add_synapses(synapses)
+                self.debug(f'synapses {name!r} did not add itself to network')
+            self.out.printf(synapses)
             self.out.hline()
+
+    def set_neuron_specs(self, *groups, **specs):
+        """
+        Set keyword specs on a set of neuron groups (by name or object).
+        """
+        for group in groups:
+            if type(group) is str:
+                group = self.neuron_groups[group]
+            for key, value in specs.items():
+                setattr(group, key, value)
+
+    def set_synapse_specs(self, *synapses, **specs):
+        """
+        Set keyword specs on a set of synapses (by name or object).
+        """
+        for syn in synapses:
+            if type(syn) is str:
+                syn = self.neuron_groups[syn]
+            for key, value in specs.items():
+                setattr(syn, key, value)
+
+    def neuron_groups_where(self, *name_substrings):
+        """
+        Iterate over neuron groups whose names contain any of the substrings.
+        """
+        for name, group in self.neuron_groups.items():
+            for sub in name_substrings:
+                if sub in name:
+                    yield group
+
+    def synapses_where(self, *, pre_substring=None, pre=None,
+        post_substring=None, post=None, transmitter=None):
+        """
+        Iterate over synapse objects that satisfy all given conditions.
+        """
+        for name, syn in self.synapses.items():
+            if pre_substring is not None:
+                if pre_substring not in syn.pre.name:
+                    continue
+            if pre is not None:
+                if pre not in (syn.pre, syn.pre.name):
+                    continue
+            if post_substring is not None:
+                if post_substring not in syn.post.name:
+                    continue
+            if post is not None:
+                if post not in (syn.post, syn.post.name):
+                    continue
+            if transmitter is not None:
+                if syn.transmitter != transmitter:
+                    continue
+            yield syn
 
     def display_neuron_groups(self):
         """
