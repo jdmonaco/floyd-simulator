@@ -249,6 +249,8 @@ class RealtimeTracesPlot(TenkoObject):
                         axdmin -= self.shrink*(axdmin - ymin)
                     if axdmax < ymax:
                         axdmax += self.shrink*(ymax - axdmax)
+                if axdmin == np.inf or axdmax == -np.inf:
+                    __import__('pdb').set_trace()
                 ax.set_ylim(axdmin, axdmax)
 
         elif self.datalim == 'expand':

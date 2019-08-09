@@ -2,6 +2,7 @@
 Base class for current-based rate-coding neuron groups.
 """
 
+import copy
 from functools import partial
 
 from toolbox.numpy import *
@@ -22,9 +23,8 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
     I_noise   = Slider(default=0, start=-1e3, end=1e3, step=1e1, units='pA', doc='')
     tau_noise = Param(default=10.0, units='ms', doc='time-constant of input current noise')
 
-    base_variables = ('x', 'y', 'r', 'g_total', 'g_total_inh', 'g_total_exc',
-                      'excitability', 'I_app', 'I_net', 'I_leak',
-                      'I_total_inh', 'I_total_exc', 'I_proxy')
+    base_variables = ('x', 'y', 'r', 'excitability', 'I_app', 'I_net',
+                      'I_leak', 'I_total_inh', 'I_total_exc', 'I_proxy')
 
     def __init__(self, *, name, N, g_log_range=(-5, 5), g_step=0.05, **kwargs):
         """
@@ -60,13 +60,15 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
 
         # Initialize metrics and variables
         self.r = self.r_rest
+        self.set_pulse_metrics() # uses default pulse curves
 
         # Create the activation nonlinearity
         self.F = lambda r: self.r_max * (1 + tanh(r/self.r_max)) / 2
 
-        # Map from transmitters to reversal potentials
-        self.E_syn = dict(GABA=self.E_inh, AMPA=self.E_exc,
-                NMDA=self.E_exc, glutamate=self.E_exc, L=self.E_exc)
+        # NOTE: Synapses expects this so add some dummy values for now
+        self.E_syn = dict(GABA=-75.0, AMPA=0.0, NMDA=0.0, glutamate=0.0, L=0.0)
+        self.E_L = -65.0
+        self.C_m = 200.0
 
         if 'network' in State:
             State.network.add_neuron_group(self)

@@ -16,7 +16,7 @@ class RateSynapses(Synapses):
     transmitter = 'glutamate'
     I_max       = Slider(default=1.0, start=0.0, end=1e1, step=1.0, doc='maximum synaptic current input')
 
-    base_variables = ('C', 'S', 'I', 'I_peak')
+    base_variables = ('C', 'S', 'I', 'I_peak', 'g_peak')
 
     def __init__(self, pre, post, **kwargs):
         self._initialized = False
@@ -28,6 +28,7 @@ class RateSynapses(Synapses):
 
         self.delay = None
         self.I_peak = self.I_max
+        self.g_peak = self.I_peak  # NOTE: hack to mirror g_peak for NetworkGraph
         self.I_total = zeros(post.N, 'f')
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
