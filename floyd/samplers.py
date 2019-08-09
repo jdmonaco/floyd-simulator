@@ -25,6 +25,10 @@ class SamplerFunc(object):
         self.loc = loc
         self.scale = scale
 
+    def __repr__(self):
+        s = '{.__class__.__name__}(loc={.loc:.3g}, scale={.scale:.3g})'
+        return s.format(*(self,)*3)
+
     def __call__(self, N_or_shape):
         return self.sample(N_or_shape)
 

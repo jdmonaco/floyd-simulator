@@ -33,9 +33,10 @@ class AEIFNeuronGroup(COBANeuronGroup):
         """
         Evolve the membrane voltage for neurons according to input currents.
         """
-        self.v += (State.dt/self.C_m) * (
-                      self.g_L*self.delta*exp((self.v - self.V_t)/self.delta)
-                      + self.I_net
+        self.v += (State.dt / self.C_m) * (
+                    self.g_L*self.delta*exp((self.v - self.V_t) / self.delta)
+                  + self.I_leak
+                  + self.I_net
         )
 
     def update_adaptation(self):
@@ -43,4 +44,13 @@ class AEIFNeuronGroup(COBANeuronGroup):
         Update the adaptation variable after spikes are computed.
         """
         self.w[self.spikes] += self.b
-        self.w += (State.dt/self.tau_w) * (self.a*(self.v - self.V_r) - self.w)
+        self.w += (State.dt / self.tau_w) * (
+                    self.a*(self.v - self.V_r) - self.w
+        )
+
+    def update_currents(self):
+        """
+        Subtract the adaptation current from the net current.
+        """
+        COBANeuronGroup.update_currents(self)
+        self.I_net -= self.w

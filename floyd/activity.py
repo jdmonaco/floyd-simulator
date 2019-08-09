@@ -19,7 +19,8 @@ class FiringRateWindow(object):
         self.window = State.calcwin / 1e3  # convert from ms to s
         self.q_max = int(State.calcwin / State.dt)
         self.spikes = np.zeros((self.N, self.q_max), 'u1')
-        self.R = np.zeros((self.N,))
+        self.R = np.zeros(self.N)
+        self.active = np.zeros(self.N, '?')
         self.j = -1
 
     def update(self):
@@ -30,9 +31,10 @@ class FiringRateWindow(object):
         self.j += 1
         self.j %= self.q_max
 
-        # Modify the values at the cursor to the current spike input
+        # Update the current spike vector and windowed rate & active vectors
         self.spikes[:,self.j] = self.group.spikes
         self.R[:] = self.spikes.sum(axis=1) / self.window
+        self.active[:] = any_(self.spikes, axis=1)
 
     def get_rates(self):
         """
@@ -50,13 +52,26 @@ class FiringRateWindow(object):
         """
         Return the average firing rate for cells active in the current window.
         """
-        active = any_(self.spikes, axis=1)
-        if any_(active):
-            return self.R[active].mean()
+        if any_(self.active):
+            return self.R[self.active].mean()
+        return 0.0
+
+    def get_mean_spikes(self):
+        """
+        Return the average spike count in the current window.
+        """
+        return self.spikes.sum(axis=1).mean()
+
+    def get_active_mean_spikes(self):
+        """
+        Return the average spike count for cells active in the current window.
+        """
+        if any_(self.active):
+            return self.spikes[self.active].sum(axis=1).mean()
         return 0.0
 
     def get_activity(self):
         """
         Return the fraction of units active in the current window.
         """
-        return any_(self.spikes, axis=1).sum() / self.N
+        return self.active.sum() / self.N

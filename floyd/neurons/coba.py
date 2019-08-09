@@ -6,7 +6,8 @@ import copy
 from functools import partial
 
 from toolbox.numpy import *
-from specify import Param, Slider, Specified, is_param
+from specify import Param, Slider, LogSlider, Specified, is_param
+from specify.utils import get_all_slots
 
 from ..layout import HexagonalDiscLayout as HexLayout
 from ..noise import OUNoiseProcess
@@ -42,8 +43,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
                       'I_app', 'I_net', 'I_leak', 'I_total_inh',
                       'I_total_exc', 'I_proxy')
 
-    def __init__(self, *, name, N=None, layout=None, g_end=10.0, g_step=0.1,
-        **kwargs):
+    def __init__(self, *, name, N=None, layout=None, g_log_range=(-5, 5),
+        g_step=0.05, **kwargs):
         """
         Construct model variables for a model neuron group.
         """
@@ -92,8 +93,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
 
         # Add any conductance gain values in the shared context as Params
         self.gain_keys = []
-        self.gain_param_base = Slider(default=1.0, start=0.0, end=g_end,
-                step=g_step, units='nS')
+        self.gain_param_base = LogSlider(default=0.0, start=g_log_range[0],
+                end=g_log_range[1], step=g_step, units='nS')
         for k, v in vars(State.context.__class__).items():
             if k.startswith(f'g_{name}_'):
                 self._add_gain_spec(k, v)
@@ -124,11 +125,13 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         _, post, pre = gname.split('_')
         new_param = copy.copy(self.gain_param_base)
         new_param.doc = f'{pre}->{post} max conductance'
+        new_all_slots = get_all_slots(type(new_param))
 
         if is_param(value):
-            for k in value.__slots__:
+            old_all_slots = get_all_slots(type(value))
+            for k in old_all_slots:
                 if hasattr(value, k) and getattr(value, k) is not None and \
-                        k in new_param.__slots__:
+                        k in new_all_slots:
                     slotval = copy.copy(getattr(value, k))
                     object.__setattr__(new_param, k, slotval)
             value = new_param.default
@@ -159,14 +162,14 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
 
         # Check whether the conductance gain spec has already been found in the
         # shared context. If not, then add a new Param to the spec with a
-        # default value of 1.0.
+        # default value of 0.0 (log10(1)).
         #
         # Gain spec names take the form `g_<post.name>_<pre.name>`.
 
         if gname in self.gain_keys:
-            self.debug(f'gain spec {gname!r} exists for {synapses.name!r}')
+            self.debug(f'found gain spec {gname!r} for {synapses.name!r}')
         else:
-            self._add_gain_spec(gname, 1.0)
+            self._add_gain_spec(gname, 0.0)
             self.debug(f'added gain spec {gname!r} for {synapses.name!r}')
 
     def update(self):
@@ -220,9 +223,9 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
             self.g_total_inh += self.g_noise_inh * self.eta_inh
 
         for gname in self.S_exc.keys():
-            self.g_total_exc += self[gname] * self.S_exc[gname].g_total
+            self.g_total_exc += 10**self[gname] * self.S_exc[gname].g_total
         for gname in self.S_inh.keys():
-            self.g_total_inh += self[gname] * self.S_inh[gname].g_total
+            self.g_total_inh += 10**self[gname] * self.S_inh[gname].g_total
 
         self.g_total = self.g_total_exc + self.g_total_inh
 
@@ -276,6 +279,18 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         Return the mean firing rate of neurons active the calculation window.
         """
         return self.activity.get_active_mean_rate()
+
+    def mean_spikes(self):
+        """
+        Return the mean spike count in the calculation window.
+        """
+        return self.activity.get_mean_spikes()
+
+    def active_mean_spikes(self):
+        """
+        Return the mean spike count of neurons active in the window.
+        """
+        return self.activity.get_active_mean_spikes()
 
     def active_fraction(self):
         """
