@@ -351,19 +351,25 @@ class SimulatorContext(Specified, AbstractBaseContext):
 
         if self._widgets:
             context_column = pn.WidgetBox(
-                        f'### {self.name}', *self._widgets.values())
+                        f'### Model controls', *self._widgets.values())
             control_columns.insert(0, context_column)
 
-        panel = pn.Row(
-                    pn.WidgetBox(
-                        f'## {self.title}',
-                        main_figure,
-                        pn.Row(tictoc, player),
-                        '### Model data',
-                        pn.Row(*tuple(table_txt.values())),
-                    ),
-                    *control_columns,
-                )
+        if table_txt:
+            main_box = pn.WidgetBox(
+                            f'## {self.title}',
+                            main_figure,
+                            pn.Row(tictoc, player),
+                            '### Model data',
+                            pn.Row(*tuple(table_txt.values())),
+                        )
+        else:
+            main_box = pn.WidgetBox(
+                            f'## {self.title}',
+                            main_figure,
+                            pn.Row(tictoc, player),
+                        )
+
+        panel = pn.Row(main_box, *control_columns)
 
         if return_panel:
             return panel

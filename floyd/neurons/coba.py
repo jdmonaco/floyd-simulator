@@ -111,8 +111,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         self.LFP_uV = 0.0  # uV, LFP signal from summed net synaptic input
 
         # Map from transmitters to reversal potentials
-        self.E_syn = dict(GABA=self.E_inh, AMPA=self.E_exc,
-                NMDA=self.E_exc, glutamate=self.E_exc, L=self.E_exc)
+        self.E_syn = dict(GABA=self.E_inh, AMPA=self.E_exc, NMDA=self.E_exc,
+                          glutamate=self.E_exc)
 
         if 'network' in State:
             State.network.add_neuron_group(self)
@@ -132,14 +132,13 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
             for k in old_all_slots:
                 if hasattr(value, k) and getattr(value, k) is not None and \
                         k in new_all_slots:
-                    slotval = copy.copy(getattr(value, k))
+                    slotval = copy.deepcopy(getattr(value, k))
                     object.__setattr__(new_param, k, slotval)
             value = new_param.default
         else:
             new_param.default = copy.deepcopy(value)
 
-        self.__class__._add_param(gname, new_param)
-        self.__dict__[new_param.attrname] = copy.deepcopy(new_param.default)
+        self.add_param(gname, new_param)
         self.gain_keys.append(gname)
         self.debug(f'added gain {gname!r} with value {new_param.default!r}')
 

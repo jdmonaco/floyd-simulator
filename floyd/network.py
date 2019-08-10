@@ -228,7 +228,8 @@ class Network(TenkoObject):
         Update main simulation figure (and tables in interactive mode).
         """
         State.simplot.update_plots()
-        if State.run_mode == RunMode.INTERACT:
+        if State.run_mode == RunMode.INTERACT and 'tablemaker' in State and \
+                State.tablemaker is not None:
             State.tablemaker.update()
 
     def reset_neurons(self):
@@ -325,27 +326,31 @@ class Network(TenkoObject):
             self.out.printf(synapses)
             self.out.hline()
 
-    def set_neuron_specs(self, *groups, **specs):
+    def set_neuron_values(self, *groups, **specs):
         """
-        Set keyword specs on a set of neuron groups (by name or object).
+        Set specs on all or a subset of neuron groups (by name or object).
         """
+        if not groups:
+            groups = tuple(self.neuron_groups.values())
         for group in groups:
             if type(group) is str:
                 group = self.neuron_groups[group]
             for key, value in specs.items():
                 setattr(group, key, value)
 
-    def set_synapse_specs(self, *synapses, **specs):
+    def set_synapse_values(self, *synapses, **specs):
         """
-        Set keyword specs on a set of synapses (by name or object).
+        Set specs on all or a subset of synapses (by name or object).
         """
+        if not synapses:
+            synapses = tuple(self.synapses.values())
         for syn in synapses:
             if type(syn) is str:
-                syn = self.neuron_groups[syn]
+                syn = self.synapses[syn]
             for key, value in specs.items():
                 setattr(syn, key, value)
 
-    def neuron_groups_where(self, *name_substrings):
+    def neuron_groups_where(self, *name_substrings, condn=None):
         """
         Iterate over neuron groups whose names contain any of the substrings.
         """
@@ -353,29 +358,22 @@ class Network(TenkoObject):
             for sub in name_substrings:
                 if sub in name:
                     yield group
+                    continue
+            if condn and condn(group):
+                yield group
 
-    def synapses_where(self, *, pre_substring=None, pre=None,
-        post_substring=None, post=None, transmitter=None):
+    def synapses_where(self, *pre_substrings, condn=None):
         """
-        Iterate over synapse objects that satisfy all given conditions.
+        Iterate over synapse objects whose presynaptic groups' names contain
+        any of the substrings.
         """
         for name, syn in self.synapses.items():
-            if pre_substring is not None:
-                if pre_substring not in syn.pre.name:
+            for sub in pre_substrings:
+                if sub in syn.pre.name:
+                    yield syn
                     continue
-            if pre is not None:
-                if pre not in (syn.pre, syn.pre.name):
-                    continue
-            if post_substring is not None:
-                if post_substring not in syn.post.name:
-                    continue
-            if post is not None:
-                if post not in (syn.post, syn.post.name):
-                    continue
-            if transmitter is not None:
-                if syn.transmitter != transmitter:
-                    continue
-            yield syn
+            if condn and condn(syn):
+                yield syn
 
     def display_neuron_groups(self):
         """

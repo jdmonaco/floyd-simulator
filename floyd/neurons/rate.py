@@ -61,14 +61,15 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         # Initialize metrics and variables
         self.r = self.r_rest
         self.set_pulse_metrics() # uses default pulse curves
+        self.excitability = 1.0
 
         # Create the activation nonlinearity
         self.F = lambda r: self.r_max * (1 + tanh(r/self.r_max)) / 2
 
-        # NOTE: Synapses expects this so add some dummy values for now
-        self.E_syn = dict(GABA=-75.0, AMPA=0.0, NMDA=0.0, glutamate=0.0, L=0.0)
-        self.E_L = -65.0
+        # Dummy values for reversals (expected by Synapses)
+        self.E_L = -60.0
         self.C_m = 200.0
+        self.E_syn = dict(GABA=-75.0, AMPA=0.0, NMDA=0.0, glutamate=0.0)
 
         if 'network' in State:
             State.network.add_neuron_group(self)
@@ -94,7 +95,7 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         else:
             new_param.default = copy.deepcopy(value)
 
-        self.__class__._add_param(gname, new_param)
+        self.add_param(gname, new_param)
         self.__dict__[new_param.attrname] = copy.deepcopy(new_param.default)
         self.gain_keys.append(gname)
         self.debug(f'added gain {gname!r} with value {new_param.default!r}')
@@ -213,7 +214,7 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         """
         apulse = self.active_pulse(self.active_fraction())
         if self.pulse_only_active:
-            rpulse = self.rate_pulse(self.get_active_mean_rate())
+            rpulse = self.rate_pulse(self.active_mean_rate())
         else:
             rpulse = self.rate_pulse(self.mean_rate())
 

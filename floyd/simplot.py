@@ -116,7 +116,7 @@ class SimulationPlotter(TenkoObject):
         """
         Register a plot to be updated using the given update function.
 
-        Note: `updater` a callback that should update the plot data.
+        Note: `updater` is a callback that should update the plot data.
         """
         self.plots.append((handle, updater))
         self.out('Artist: {}', handle, prefix='SimPlotRegistrar')
