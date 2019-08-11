@@ -96,7 +96,6 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
             new_param.default = copy.deepcopy(value)
 
         self.add_param(gname, new_param)
-        self.__dict__[new_param.attrname] = copy.deepcopy(new_param.default)
         self.gain_keys.append(gname)
         self.debug(f'added gain {gname!r} with value {new_param.default!r}')
 
