@@ -53,8 +53,8 @@ class NetworkGraph(TenkoObject):
         if self.fig is not None:
             plt.close(self.fig)
 
-    def plot(self, ax=None, figsize=(4, 4), lw=2, cmap='plasma', alpha=0.7,
-        label_offset=0.12, axes_zoom=0.18):
+    def plot(self, ax=None, figsize=(4, 4), lw=2, cmap='plasma', alpha=0.8,
+        label_offset=0, node_size=1.4e3, axes_zoom=0.15):
         """
         Draw the initial graph and store node, edge, and artist information.
         """
@@ -63,8 +63,11 @@ class NetworkGraph(TenkoObject):
                     figsize=figsize, dpi=Config.screendpi)
             self.ax = plt.axes([0,0,1,1])
             self.ax.set_axis_off()
-        if type(ax) is str and ax in State.simplot.axes:
-            self.ax = State.simplot.axes[ax]
+        else:
+            if ax in State.simplot.axes:
+                self.ax = State.simplot.axes[ax]
+            else:
+                raise KeyError(f'axes name {ax!r} does not exist')
         self.cmap = plt.get_cmap(cmap)
         self.lw = lw
 
@@ -75,7 +78,7 @@ class NetworkGraph(TenkoObject):
         # Node shapes can be any MPL marker: 'so^>v<dph8'.
         # matplotlib.collections.PathCollection instance
         self.nodes = nx.draw_networkx_nodes(self.G, pos, ax=self.ax,
-                node_shape='o', node_size=1e3, alpha=alpha, linewidths=1,
+                node_shape='o', node_size=node_size, alpha=alpha, linewidths=1,
                 vmin=0, vmax=1, edgecolors='k', node_color='w')
         self.colors[:,-1] = alpha
         self.nodes.set_zorder(-10)
@@ -116,10 +119,11 @@ class NetworkGraph(TenkoObject):
         # List of matplotlib.patches.FancyArrowPatch
         if self.G.edges:
             self.arrows = nx.draw_networkx_edges(self.G, pos, ax=self.ax,
-                    alpha=alpha, arrowstyle='-|>', arrowsize=36, arrows=True,
-                    connectionstyle='angle3')
+                    alpha=alpha, arrowstyle='-|>', arrowsize=12, arrows=True,
+                    node_size=node_size, connectionstyle='arc3,rad=-0.12')
             for arrow in self.arrows:
                 arrow.set_zorder(0)
+                arrow.set_alpha(alpha)
 
         # Give stimulators fancy arrows and inhibitory synapses bracket arrows.
         # Set linewidths to Z-score of total connection strength.
@@ -135,7 +139,7 @@ class NetworkGraph(TenkoObject):
                 continue
             S = attrs['object']
             if S.transmitter == 'GABA':
-                arrow.set_arrowstyle('-[')
+                arrow.set_arrowstyle('->')
             if sigma == 0.0:
                 arrow.set_linewidth(lw)
                 continue
