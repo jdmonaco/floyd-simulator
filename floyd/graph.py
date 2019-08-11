@@ -42,6 +42,8 @@ class NetworkGraph(TenkoObject):
         self.labels = []
         self.arrows = None
         self.artists = []
+        self.metric_func = None
+        self.metric_range = None
         self.colors = ones((self.N, 4))
 
         State.netgraph = self
@@ -53,8 +55,9 @@ class NetworkGraph(TenkoObject):
         if self.fig is not None:
             plt.close(self.fig)
 
-    def plot(self, ax=None, figsize=(4, 4), lw=2, cmap='plasma', alpha=0.8,
-        label_offset=0, node_size=1e3, axes_zoom=0.16):
+    def plot(self, ax=None, metric='active_fraction', metric_range=(0, 1),
+        figsize=(4, 4), lw=2, cmap='plasma', alpha=0.8, label_offset=0,
+        node_size=1e3, axes_zoom=0.16):
         """
         Draw the initial graph and store node, edge, and artist information.
         """
@@ -64,12 +67,12 @@ class NetworkGraph(TenkoObject):
             self.ax = plt.axes([0,0,1,1])
             self.ax.set_axis_off()
         else:
-            if ax in State.simplot.axes:
-                self.ax = State.simplot.axes[ax]
-            else:
-                raise KeyError(f'axes name {ax!r} does not exist')
+            self.ax = State.simplot.get_axes(ax)
         self.cmap = plt.get_cmap(cmap)
         self.lw = lw
+        self.metric_func = metric
+        self.metric_min = metric_range[0]
+        self.metric_ptp = diff(metric_range)
 
         # Get the layout position of the graph
         self.pos = pos = nx.nx_agraph.graphviz_layout(self.G)
@@ -103,7 +106,7 @@ class NetworkGraph(TenkoObject):
             else:
                 label.set_position((x, y - offset))
             label.set_path_effects([
-                path_effects.Stroke(linewidth=3, foreground='white'),
+                path_effects.Stroke(linewidth=2.5, foreground='white'),
                 path_effects.Normal(),
             ])
 
@@ -120,7 +123,7 @@ class NetworkGraph(TenkoObject):
         if self.G.edges:
             self.arrows = nx.draw_networkx_edges(self.G, pos, ax=self.ax,
                     alpha=alpha, arrowstyle='-|>', arrowsize=12, arrows=True,
-                    node_size=node_size, connectionstyle='arc3,rad=-0.12')
+                    node_size=node_size, connectionstyle='arc3,rad=-0.13')
             for arrow in self.arrows:
                 arrow.set_zorder(0)
                 arrow.set_alpha(alpha)
@@ -172,14 +175,16 @@ class NetworkGraph(TenkoObject):
         """
         Update the network graph with connection strength and neuron metrics.
         """
-        # Set the node face colors according to neuron group "pulse"
+        # Set the node face colors according to neuron group metric
         self.colors[:] = self.nodes.get_facecolors()
         for i, node in enumerate(self.G.nodes.items()):
             name, attrs = node
             if 'object' not in attrs or name.startswith('Stim'):
                 continue
             group = attrs['object']
-            self.colors[i] = self.cmap(group.pulse())
+            metric = getattr(group, self.metric_func)()
+            metric_norm = (metric - self.metric_min) / self.metric_ptp
+            self.colors[i] = self.cmap(metric_norm)
         self.nodes.set_facecolors(self.colors)
 
         # Update linewidths to Z-score of total connection strength
