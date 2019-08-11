@@ -51,12 +51,13 @@ class SimulationPlotter(TenkoObject):
                                   figsize=self.figsize, dpi=State.figdpi)
             plt.ioff()
         self.gs = GridSpec(nrows, ncols, self.fig, 0, 0, 1, 1, 0, 0)
-        self.axes = {}
-        self.axes_objects = []
+        self.axes = {}  # map names to axes objects
+        self.axes_names = {}  # reverse mapping of axes objects to their names
         self.plots = []
         self.artists = []
-        self.axeslabels = {}
+        self.axes_labels = {}
         self.traceplots = []
+        self.timestamp = None
         self.initializer = None
         self.network_graph = None
         self.network_graph_in_fig = False
@@ -79,22 +80,48 @@ class SimulationPlotter(TenkoObject):
                 ax = spec
             else:
                 ax = self.fig.add_subplot(spec)
+            if name in self.axes:
+                raise ValueError('an axis named {name!r} was set previously')
+            if ax in self.axes_names:
+                raise ValueError('axis {self.axes_names[ax]!r} already set')
             self.axes[name] = ax
-            self.axes_objects.append(ax)
-
-        for ax in self.axes_objects:
+            self.axes_names[ax] = name
             ax.set_axis_off()
 
+    def _get_axes_object(self, ax_or_name):
+        """
+        Get an mpl.axes.Axes object for a given axes argument.
+        """
+        if ax_or_name in self.axes_names:
+            ax = ax_or_name
+        elif ax_or_name in self.axes:
+            ax = self.axes[ax_or_name]
+        else:
+            raise KeyError(f'unknown axes value: {ax_or_name!r}')
+        return ax
+
+    def _get_axes_name(self, ax_or_name):
+        """
+        Get the name of a mpl.axes.Axes object for a given axes argument.
+        """
+        if ax_or_name in self.axes_names:
+            name = self.axes_names[ax_or_name]
+        elif ax_or_name in self.axes:
+            name = ax_or_name
+        else:
+            raise KeyError(f'unknown axes value: {ax_or_name!r}')
+        return name
+
     @block_record_mode
-    def get_axes(self, *names):
+    def get_axes(self, *axargs):
         """
         Return a list of axes objects keyed by name (or a single axes).
         """
-        if not names:
+        if not axargs:
             return tuple(self.axes.values())
-        if len(names) == 1 and names[0] in self.axes:
-            return self.axes[names[0]]
-        return [self.axes[name] for name in names]
+        if len(axargs) == 1:
+            return self._get_axes_object(axargs[0])
+        return [self._get_axes_object(ax) for ax in axargs]
 
     @block_record_mode
     def update_plots(self):
@@ -130,8 +157,10 @@ class SimulationPlotter(TenkoObject):
         """
         Set a NetworkGraph instance to be updated during the simulation.
         """
+        if self.network_graph is not None:
+            raise RuntimeError('a network graph has already been registered')
         self.network_graph = netgraph
-        self.network_graph_in_fig = netgraph.ax in self.axes_objects
+        self.network_graph_in_fig = netgraph.ax in self.axes_names
         self.out('Graph: {} (main figure = {})', netgraph,
                 self.network_graph_in_fig, prefix='SimPlotRegistrar')
 
@@ -148,7 +177,7 @@ class SimulationPlotter(TenkoObject):
         self.traceplots.append(rtp)
 
     @block_record_mode
-    def draw_borders(self, color='k', linewidth=1, bottom=None, right=None):
+    def draw_borders(self, *axes, color='k', linewidth=1, bottom=None, right=None):
         """
         Draw borders around each of the plots.
 
@@ -166,7 +195,7 @@ class SimulationPlotter(TenkoObject):
         right : tuple of axes names, optional
             Axes with right != 1 but which require a right border line
         """
-        for name, ax in self.axes.items():
+        for ax in self.get_axes(*axes):
             _, b, r, _ = ax.get_position().extents
             pkw = dict(c=color, lw=linewidth, transform=ax.transAxes)
             ax.plot([0,0], [0,1], **pkw)  # left
@@ -177,31 +206,32 @@ class SimulationPlotter(TenkoObject):
                 ax.plot([1,1], [0,1], **pkw)  # right
 
     @block_record_mode
-    def draw_axes_labels(self, *axnames, pad=None, loc='left', **fontkw):
+    def draw_axes_labels(self, *axes, pad=None, loc='left', **fontkw):
         """
         Add axes names as plot labels in the given axes location.
         """
-        if not axnames:
-            axnames = tuple(self.axes.keys())
+        if not axes:
+            axes = tuple(self.axes.keys())
         loc = 'left' if loc is None else loc
-        for name in axnames:
+        fontdict = dict(color='navy', fontweight='medium')
+        fontdict.update(fontkw)
+        for axarg in axes:
+            name = self._get_axes_name(axarg)
             self.draw_label(name[0].title() + name[1:], name, pad=pad, loc=loc,
-                            **fontkw)
+                            **fontdict)
 
     @block_record_mode
-    def draw_label(self, s, axname, *, pad=None, loc=None, **fontkw):
+    def draw_label(self, s, ax, *, pad=None, loc=None, **fontkw):
         """
         Plot a label to the given axes and return its handle.
         """
-        if axname not in self.axes:
-            raise KeyError(f'unknown axes key {key!r}')
+        ax = self._get_axes_object(ax)
 
         # Get the position and alignment for the label location
         loc = 'upper center' if loc is None else loc
         x, y, ha, va = self._loc_to_position(pad=pad, loc=loc)
 
         # Plot the text label with a nice white-stroke outline for clarity
-        ax = self.axes[axname]
         fontdict = dict(ha=ha, va=va, transform=ax.transAxes, fontsize='large',
                         zorder=100)
         fontdict.update(fontkw)
@@ -212,9 +242,9 @@ class SimulationPlotter(TenkoObject):
         ])
 
         # Add the label to an axes-specific list of labels
-        if axname not in self.axeslabels:
-            self.axeslabels[axname] = []
-        self.axeslabels[axname].append(label)
+        if ax not in self.axes_labels:
+            self.axes_labels[ax] = []
+        self.axes_labels[ax].append(label)
 
         return label
 
@@ -288,7 +318,7 @@ class SimulationPlotter(TenkoObject):
         if self.artists:
             return self.artists
 
-        self.init_timestamp(loc=timestamp_loc, axname=timestamp_axes)
+        self.init_timestamp(loc=timestamp_loc, ax=timestamp_axes)
 
         for plot, _ in self.plots:
             if type(plot) is list:
@@ -302,24 +332,24 @@ class SimulationPlotter(TenkoObject):
             self.artists.extend(rtp.plot())
 
         if self.network_graph is not None:
-            if self.network_graph.ax in self.axes_objects:
+            if self.network_graph_in_fig:
                 self.artists.extend(self.network_graph.artists)
 
         return self.artists
 
-    def init_timestamp(self, loc=None, axname=None, **txt):
+    def init_timestamp(self, loc=None, ax=None, **txt):
         """
         Create the text object for the timestamp.
         """
-        if hasattr(self, 'timestamp'):
-            return
+        if self.timestamp is not None: return
 
         # Get the position and alignment for the timestamp label
         loc = 'right' if loc is None else loc
         x, y, ha, va = self._loc_to_position(loc=loc)
 
         # Plot the timestamp text object
-        ax = self.axes_objects[0] if axname is None else self.axes[axname]
+        firstax = next(iter(self.axes_names.keys()))
+        ax = firstax if ax is None else self._get_axes_object(ax)
         fmt = dict(color='gray', ha=ha, va=va, transform=ax.transAxes,
                    fontweight='normal')
         fmt.update(txt)
