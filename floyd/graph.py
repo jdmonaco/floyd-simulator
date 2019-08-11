@@ -54,7 +54,7 @@ class NetworkGraph(TenkoObject):
             plt.close(self.fig)
 
     def plot(self, ax=None, figsize=(4, 4), lw=2, cmap='plasma', alpha=0.8,
-        label_offset=0, node_size=1.4e3, axes_zoom=0.15):
+        label_offset=0, node_size=1e3, axes_zoom=0.16):
         """
         Draw the initial graph and store node, edge, and artist information.
         """
@@ -86,7 +86,7 @@ class NetworkGraph(TenkoObject):
         # Draw the labels.
         # Dict of labels keyed on the nodes.
         labels = nx.draw_networkx_labels(self.G, pos, ax=self.ax,
-                font_size=12, font_color='#2c88f0', font_weight='bold',
+                font_size=8, font_color='#2c88f0', font_weight='bold',
                 zorder=10)
         self.labels = list(labels.values())
 
