@@ -193,9 +193,11 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         """
         Update spikes (and refractory periods, etc.) for the current timstep.
         """
-        # Enforce absolute refractory period
-        dt = State.t - self.t_spike
-        self.v[dt < self.tau_ref] = self.V_r
+        # Enforce absolute refractory period by disallowing membrane voltage
+        # from passing above the reset voltage until `tau_ref` time has passed
+        ix_ref = (State.t - self.t_spike < self.tau_ref).nonzero()[0]
+        ix_ref = ix_ref[self.v[ix_ref] > self.V_r]
+        self.v[ix_ref] = self.V_r
 
         # Perform voltage resets for threshold crossings
         self.spikes = self.v > self.V_thr

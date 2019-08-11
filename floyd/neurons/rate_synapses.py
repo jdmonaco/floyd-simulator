@@ -32,7 +32,6 @@ class RateSynapses(Synapses):
         self.I_total = zeros(post.N, 'f')
         self.distances = distances(c_[post.x, post.y], c_[pre.x, pre.y])
 
-        State.network.add_synapses(self)
         self._initialized = True
 
     def set_delays(self, cond_velocity=0.5):
