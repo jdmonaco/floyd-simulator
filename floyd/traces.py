@@ -9,6 +9,7 @@ import operator
 from collections import deque
 
 import numpy as np
+from matplotlib import axes
 
 from tenko.base import TenkoObject
 
@@ -92,8 +93,12 @@ class RealtimeTracesPlot(TenkoObject):
             # Check if a named axes is in the shared simulation plotter
             if ax in State.simplot:
                 ax = State.simplot.get_axes(ax)
-            self.names.append(name)
+            elif isinstance(ax, axes.Axes):
+                pass
+            else:
+                raise ValueError(f'not an axes name or instance: {ax!r}')
             self.ax[name] = ax
+            self.names.append(name)
 
             # Set the updater callbacks
             if updater is not None:
