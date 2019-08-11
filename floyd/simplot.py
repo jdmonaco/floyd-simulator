@@ -10,6 +10,7 @@ import functools
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
+import matplotlib.patheffects as path_effects
 
 from tenko.base import TenkoObject
 from roto.dicts import merge_two_dicts
@@ -54,6 +55,7 @@ class SimulationPlotter(TenkoObject):
         self.axes_objects = []
         self.plots = []
         self.artists = []
+        self.axeslabels = {}
         self.traceplots = []
         self.initializer = None
         self.network_graph = None
@@ -88,7 +90,9 @@ class SimulationPlotter(TenkoObject):
         """
         Return a list of axes objects keyed by name (or a single axes).
         """
-        if len(names) == 1:
+        if not names:
+            return tuple(self.axes.values())
+        if len(names) == 1 and names[0] in self.axes:
             return self.axes[names[0]]
         return [self.axes[name] for name in names]
 
@@ -173,6 +177,88 @@ class SimulationPlotter(TenkoObject):
                 ax.plot([1,1], [0,1], **pkw)  # right
 
     @block_record_mode
+    def draw_axes_labels(self, *axnames, pad=None, loc='left', **fontkw):
+        """
+        Add axes names as plot labels in the given axes location.
+        """
+        if not axnames:
+            axnames = tuple(self.axes.keys())
+        loc = 'left' if loc is None else loc
+        for name in axnames:
+            self.draw_label(name[0].title() + name[1:], name, pad=pad, loc=loc,
+                            **fontkw)
+
+    @block_record_mode
+    def draw_label(self, s, axname, *, pad=None, loc=None, **fontkw):
+        """
+        Plot a label to the given axes and return its handle.
+        """
+        if axname not in self.axes:
+            raise KeyError(f'unknown axes key {key!r}')
+
+        # Get the position and alignment for the label location
+        loc = 'upper center' if loc is None else loc
+        x, y, ha, va = self._loc_to_position(pad=pad, loc=loc)
+
+        # Plot the text label with a nice white-stroke outline for clarity
+        ax = self.axes[axname]
+        fontdict = dict(ha=ha, va=va, transform=ax.transAxes, fontsize='large',
+                        zorder=100)
+        fontdict.update(fontkw)
+        label = ax.text(x, y, str(s), **fontdict)
+        label.set_path_effects([
+            path_effects.Stroke(linewidth=3, foreground='white'),
+            path_effects.Normal(),
+        ])
+
+        # Add the label to an axes-specific list of labels
+        if axname not in self.axeslabels:
+            self.axeslabels[axname] = []
+        self.axeslabels[axname].append(label)
+
+        return label
+
+    @staticmethod
+    def _loc_to_position(pad=None, loc=None):
+        """
+        Get an (x, y, ha, va) tuple for `Axes.text` position and alignment.
+
+        Location `loc` defaults to 'upper left' and vertical alignment
+        defaults to 'lower' if omitted. Location should otherwise be specified
+        as a two-word string from ('upper', 'center', 'lower') and ('left',
+        'center', 'right'), respectively.
+        """
+        loc = 'lower left' if loc is None else loc
+        loc = loc.split()
+        if len(loc) == 1:
+            vloc, hloc = 'lower', loc[0]
+        elif len(loc) == 2:
+            vloc, hloc = loc
+        else:
+            raise ValueError(f'bad location value {loc!r}')
+
+        pad = 0.03 if pad is None else pad
+        if vloc == 'upper':
+            y, va = 1 - pad, 'top'
+        elif vloc == 'center':
+            y, va = 0.5, 'center'
+        elif vloc == 'lower':
+            y, va = pad, 'bottom'
+        else:
+            raise ValueError(f'bad vertical alignment {vloc!r}')
+
+        if hloc == 'left':
+            x, ha = pad, hloc
+        elif hloc == 'center':
+            x, ha = 0.5, hloc
+        elif hloc == 'right':
+            x, ha = 1 - pad, hloc
+        else:
+            raise ValueError(f'bad vertical alignment {hloc!r}')
+
+        return x, y, ha, va
+
+    @block_record_mode
     def init(self, initializer):
         """
         Run the figure initialization function (only in interactive mode).
@@ -192,7 +278,7 @@ class SimulationPlotter(TenkoObject):
         if self.network_graph is not None:
             self.network_graph.closefig()
 
-    def get_all_artists(self):
+    def get_all_artists(self, timestamp_axes=None, timestamp_loc='right'):
         """
         Save the list of artists in batch mode to be returned from initializer.
         """
@@ -202,7 +288,7 @@ class SimulationPlotter(TenkoObject):
         if self.artists:
             return self.artists
 
-        self.init_timestamp()
+        self.init_timestamp(loc=timestamp_loc, axname=timestamp_axes)
 
         for plot, _ in self.plots:
             if type(plot) is list:
@@ -221,18 +307,23 @@ class SimulationPlotter(TenkoObject):
 
         return self.artists
 
-    def init_timestamp(self, xy=(0.02, 0.02), axname=None, **txt):
+    def init_timestamp(self, loc=None, axname=None, **txt):
         """
         Create the text object for the timestamp.
         """
         if hasattr(self, 'timestamp'):
             return
 
+        # Get the position and alignment for the timestamp label
+        loc = 'right' if loc is None else loc
+        x, y, ha, va = self._loc_to_position(loc=loc)
+
+        # Plot the timestamp text object
         ax = self.axes_objects[0] if axname is None else self.axes[axname]
-        fmt = dict(color='gray', transform=ax.transAxes, va='bottom',
-                    ha='left', fontweight='normal')
+        fmt = dict(color='gray', ha=ha, va=va, transform=ax.transAxes,
+                   fontweight='normal')
         fmt.update(txt)
-        self.timestamp = ax.text(xy[0], xy[1], '', **fmt)
+        self.timestamp = ax.text(x, y, '', **fmt)
 
         def update_timestamp():
             self.timestamp.set_text(f't = {State.t:.2f} ms')
