@@ -54,13 +54,15 @@ class RealtimeTracesPlot(TenkoObject):
             shrinks (float, relaxation time-constant), partially adaptive by
             only expanding as necessary ('expand'), or turned off ('none').
 
-        legend : True | False | 'last' | numpy function name | callable
+        legend : True | False | 'last' | 'maxabs' | numpy fn. name | callable
             Simple plot legends using the data trace labels can be turned on or
             off with boolean values. Dynamic legends can be enabled that update
-            with every update of the data traces: the last (current) value can
-            be displayed ('last'), a numpy function result on the current data
-            trace, or any python callable that receives the data trace and
-            returns a scalar value.
+            with every update of the data traces: the last (current) value
+            ('last') or the value with the largest absolute value ('maxabs')
+            can be displayed; similarly, providing a numpy function name or any
+            python callable will display its results given the data trace (the
+            functions need to be able to receive an array argument and return a
+            scalar value).
 
         legend_format : dict, optional
             Legend formatting arguments can be provided
@@ -156,6 +158,12 @@ class RealtimeTracesPlot(TenkoObject):
         self._legends = []
         if legend == 'last':
             self.legend_fn = operator.itemgetter(-1)
+        elif legend == 'maxabs':
+            def fn(x):
+                a = np.absolute(x)
+                i = np.argmax(a)
+                return np.sign(x[i]) * a[i]
+            self.legend_fn = fn
         elif type(legend) is str and hasattr(np, legend):
             self.legend_fn = getattr(np, legend)
         elif callable(legend):
