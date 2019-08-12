@@ -2,7 +2,7 @@
 Subpackage for simulations defined within floyd itself.
 """
 
-VERSION = '0.2.1'
+VERSION = '0.2.2'
 
 
 import os
