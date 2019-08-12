@@ -29,8 +29,8 @@ class SamplerFunc(object):
         s = '{.__class__.__name__}(loc={.loc:.3g}, scale={.scale:.3g})'
         return s.format(*(self,)*3)
 
-    def __call__(self, N_or_shape):
-        return self.sample(N_or_shape)
+    def __call__(self, *args, **kwargs):
+        return self.sample(*args, **kwargs)
 
     def sample(self, N_or_shape, state=None):
         if isscalar(N_or_shape):

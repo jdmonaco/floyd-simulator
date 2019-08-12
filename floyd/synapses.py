@@ -200,7 +200,7 @@ class Synapses(Specified, BaseUnitGroup):
             else:
                 raise ValueError(f'invalid fanout value ({fanout})')
         elif hasattr(fanout, 'sample'):
-            n += fanout(N_pre).astype('i')
+            n += fanout(N_pre, state=self.rnd).astype('i')
             n[n<0] = 0
         else:
             raise ValueError(f'invalid fanout value ({fanout})')
