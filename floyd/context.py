@@ -157,18 +157,16 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # Consume keywords for parameters in class attribute `spec`
         spec_keys = list(filter(lambda k: k in self.spec, kwargs.keys()))
         for key in spec_keys:
-            setattr(self, key, kwargs.pop(key))
-            self.debug(f'consumed kwarg {key!r} with {getattr(self, key)!r}')
+            value = kwargs.pop(key)
+            if value is not None:
+                setattr(self, key, value)
+                self.debug(f'consumed {key!r} with {getattr(self, key)!r}')
         if spec_keys:
             self.out(f'Updated {len(spec_keys)} parameter values',
                      prefix='KeywordSpecs')
 
         # Derived values to be updated (e.g., blocksize)
         self.blocksize = int(self.dt_block / self.dt)
-
-        # Print out the resulting spec parameters if this is the actual run
-        if finish_setup:
-            self.printspec()
 
         # Update global scope and shared state
         specdict = dict(self.items())
@@ -186,19 +184,25 @@ class SimulatorContext(Specified, AbstractBaseContext):
         if self.rnd_seed:
             self.set_default_random_seed(rnd_seed)
 
-        # Write JSON files of current parameter values and defaults
-        sfpath = self.write_json(specdict, SPECFILE)
+        # Write JSON defaults file for parameters
         dfpath = self.write_json(specdefaults, DFLTFILE, base='context')
-        self.out(sfpath, prefix='WroteSpecFile')
         self.out(dfpath, prefix='WroteDefaultsFile')
 
-        # We want to process parameter updates and write out defaults and
-        # specs files during both construction (__init__) and method calls to
-        # begin simulations (@simulate decorated methods). However, we do not
-        # want the constructor to create the network, etc.
+        # We want to process parameter updates and write out the defaults file
+        # during both construction (__init__) and method calls to begin
+        # simulations (@simulate decorated methods). However, we do not want
+        # the constructor to overwrite the specs file in the previous run dir
+        # or actually create the network object, etc.
 
         if not finish_setup:
             return
+
+        # Print out the resulting spec parameters for the actual run
+        self.printspec()
+
+        # Write JSON spec file of current parameter values
+        sfpath = self.write_json(specdict, SPECFILE)
+        self.out(sfpath, prefix='WroteSpecFile')
 
         # Initialize the simulation network object and assign to an instance
         # attribute (n.b., it goes into shared state anyway)
