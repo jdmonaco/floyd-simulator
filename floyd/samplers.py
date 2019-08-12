@@ -32,14 +32,15 @@ class SamplerFunc(object):
     def __call__(self, N_or_shape):
         return self.sample(N_or_shape)
 
-    def sample(self, N_or_shape):
+    def sample(self, N_or_shape, state=None):
         if isscalar(N_or_shape):
             shape = (N_or_shape,)
         else:
             shape = tuple(map(int, N_or_shape))
-        return self._sample(shape)
+        state = random if state is None else state
+        return self._sample(shape, state)
 
-    def _sample(self, shape):
+    def _sample(self, shape, rnd):
         raise NotImplementedError
 
 
@@ -57,8 +58,8 @@ class ClippedSamples(object):
         self.s_min = s_min
         self.s_max = s_max
 
-    def sample(self, N_or_shape):
-        x = SamplerFunc.sample(self, N_or_shape)
+    def sample(self, N_or_shape, state=None):
+        x = SamplerFunc.sample(self, N_or_shape, state=state)
         x = clip(x, self.s_min, self.s_max, out=x)
         return x
 
@@ -75,20 +76,20 @@ class PositiveSamples(ClippedSamples):
 
 class RandomSampler(SamplerFunc):
 
-    def _sample(self, shape):
+    def _sample(self, shape, rnd):
         """
         Sample values from the specified uniform distribution.
         """
-        return self.loc + self.scale * random_sample(shape)
+        return self.loc + self.scale * rnd.random_sample(shape)
 
 
 class GaussianSampler(SamplerFunc):
 
-    def _sample(self, shape):
+    def _sample(self, shape, rnd):
         """
         Sample values from the specified Gaussian distribution.
         """
-        return self.loc + self.scale * random.standard_normal(shape)
+        return self.loc + self.scale * rnd.standard_normal(shape)
 
 class ClippedGaussianSampler(ClippedSamples, GaussianSampler):
     pass
@@ -103,12 +104,12 @@ class LognormalSampler(SamplerFunc):
         SamplerFunc.__init__(self, loc, scale)
         self.sigma = sigma
 
-    def _sample(self, shape):
+    def _sample(self, shape, rnd):
         """
         Sample values from the specified Gaussian distribution.
         """
         return st.lognorm.rvs(self.sigma, loc=self.loc, scale=self.scale,
-                    size=shape)
+                    size=shape, random_state=rnd)
 
 class ClippedLognormalSampler(ClippedSamples, LognormalSampler):
     pass

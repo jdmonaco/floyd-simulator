@@ -16,7 +16,7 @@ class BaseUnitGroup(TenkoObject):
     base_dtypes = {}
     default_dtype = 'f'
 
-    def __init__(self, *, N, dtype=None, **kwargs):
+    def __init__(self, *, N, dtype=None, seed=None, **kwargs):
         """
         Create a group of model units with named variables.
 
@@ -32,6 +32,10 @@ class BaseUnitGroup(TenkoObject):
 
         dtype : dict | '?' | 'u' | 'i' | 'f' | 'd', optional (default 'f')
             Default numpy dtype to use for initializing array variables
+
+        seed : str
+            A seed-key string to be converted into a random seed for an
+            instance-specific RandomState object at the `rnd` attribute
         """
         super().__init__(**kwargs)
 
@@ -40,6 +44,9 @@ class BaseUnitGroup(TenkoObject):
             self.N = reduce(op.mul, self.shape)
         else:
             self.N = self.shape
+
+        self.rnd = None
+        self.set_random_seed(seed)
 
         self._vardtypes = dict(self.base_dtypes)
         dflt_dtype = self.default_dtype
@@ -53,6 +60,15 @@ class BaseUnitGroup(TenkoObject):
             thisdtype = self._vardtypes.get(varname, dflt_dtype)
             self.__dict__[varname] = zeros(self.shape, thisdtype)
 
+    def set_random_seed(self, seed):
+        """
+        Set random seed on `rnd` RandomState instance attribute from string.
+        """
+        seed = self.name if seed is None else seed
+        self._rand_seed = sum(list(map(ord, seed)))
+        self.rnd = np.random.RandomState(seed=self._rand_seed)
+        self.out(f'{self._rand_seed} [key: \'{seed}\']')
+
     def set(self, **values):
         """
         Set variables using keyword arguments.
@@ -62,7 +78,8 @@ class BaseUnitGroup(TenkoObject):
 
     def _evaluate(self, value):
         if hasattr(value, 'sample'):
-            return value.sample(self.shape)
+            __import__('pdb').set_trace()
+            return value.sample(self.shape, state=self.rnd)
         return value
 
     def __setattr__(self, name, value):
