@@ -25,6 +25,7 @@ from roto.strings import sluggify
 from pouty.console import snow as hilite
 from pouty import debug_mode, debug
 
+from .recorder import MovieRecorder
 from .network import Network
 from .state import State, RunMode
 from .config import Config
@@ -238,16 +239,17 @@ class SimulatorContext(Specified, AbstractBaseContext):
         raise NotImplementedError('models must implement setup_model()')
 
     @simulate
-    def create_movie(self, specfile=None, dpi=Config.moviedpi, fps=Config.fps):
+    def create_movie(self, specfile=None, dpi=None, fps=None, compress=None):
         """
         Simulate the model in batch mode for movie generation.
         """
+        dpi = Config.moviedpi if dpi is None else dpi
+        movie_recorder = MovieRecorder(fps=fps, compress=compress)
         anim = FuncAnimation(
                 fig       = State.simplot.fig,
                 func      = State.network.animation_update,
                 init_func = State.simplot.initializer,
-                frames    = range(State.N_t),
-                interval  = int(1000/Config.fps),
+                frames    = movie_recorder.N_t_frame,
                 repeat    = False,
                 blit      = True,
         )
@@ -255,7 +257,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # Save the animation as a movie file and play the movie!
         self.c['movie_file'] = self.filename(use_modname=True, use_runtag=True,
                 ext='mp4')
-        anim.save(self.path(self.c.movie_file), fps=fps, dpi=dpi)
+        anim.save(self.path(self.c.movie_file), fps=State.fps, dpi=dpi)
         State.simplot.closefig()
         self.play_movie()
 
