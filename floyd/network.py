@@ -199,10 +199,17 @@ class Network(TenkoObject):
 
     def animation_update(self, n=None):
         """
-        For animation mode, run one timestep and return updated artists.
+        For animation mode, run enough timesteps for a video frame of the movie
+        and return updated artists.
         """
-        self.model_update()
-        State.simplot.update_traces_data()
+        new_frame = False
+        while not new_frame:
+            self.model_update()
+            State.simplot.update_traces_data()
+            new_frame = State.movie_recorder.update()
+            if new_frame and State.show_debug:
+                self.debug('frame n = {.n_frame}, t = {.t_frame}',
+                           State.movie_recorder, State.movie_recorder)
         self.display_update()
         return State.simplot.artists
 

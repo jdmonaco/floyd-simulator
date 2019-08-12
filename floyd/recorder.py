@@ -2,7 +2,7 @@
 Record state, model variables, and spike/event data across a simulation.
 """
 
-__all__ = ['ModelRecorder']
+__all__ = ['MovieRecorder', 'ModelRecorder']
 
 
 import numpy as np
@@ -12,6 +12,60 @@ from tenko.base import TenkoObject
 
 from .state import State, RunMode
 from .config import Config
+
+
+class MovieRecorder(TenkoObject):
+
+    """
+    A reduced version of the ModelRecorder for triggering video frames.
+    """
+
+    def __init__(self, fps=None, compress=None):
+        """
+        Initialize a modulo-based time-tracker with shared state outputs.
+        """
+        super().__init__()
+
+        # Compute the implicit frame interval from fps and compression
+        State.fps = Config.fps if fps is None else fps
+        compress = Config.compress if compress is None else compress
+        interval = 1e3 / State.fps  # ms / video frame
+        dt_frame = compress * interval  # ms of simulation per frame
+        if dt_frame < State.dt:
+            dt_frame = State.dt
+            self.out(f'Setting frame rate to {1/dt_frame!r} because implicit '
+                     f'interval was <dt ({State.dt!r})', warning=True)
+        self.dt_frame = dt_frame
+
+        # Recording time tracking
+        ts = np.arange(0, State.duration + self.dt_frame, self.dt_frame)
+        self.ts_frame = ts[ts <= State.duration]
+        self.N_t_frame = len(self.ts_frame)
+        self.n_frame = -1  # video frame index
+        self.t_frame = -self.dt_frame
+        self._frame_mod = np.inf  # frame trigger; inf triggers at t=0
+
+        State.movie_recorder = self
+
+    def update(self):
+        """
+        Advance the timing of the recorder and return True for a new frame.
+        """
+        # Use a modulo calculation to determine when a new frame should occur
+        if self.dt_frame > State.dt:
+            _frame_mod = State.t % self.dt_frame
+            between_frames = _frame_mod >= self._frame_mod
+            self._frame_mod = _frame_mod
+            if between_frames:
+                return False
+
+        # Update recording index and time
+        if self.n_frame >= self.N_t_frame:
+            self.out('Movie complete (t = {:.3f} ms)', self.ts_frame[-1])
+            return False
+        self.n_frame += 1
+        self.t_frame = self.ts_frame[self.n_frame]
+        return True
 
 
 class ModelRecorder(TenkoObject):

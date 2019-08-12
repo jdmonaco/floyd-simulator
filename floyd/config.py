@@ -27,7 +27,8 @@ Config.name           = 'floyd'
 Config.figdpi         = IMACPRO_DPI
 Config.moviedpi       = LG_ULTRAWIDE_DPI
 Config.screendpi      = LG_ULTRAWIDE_DPI
-Config.fps            = 100.0
+Config.fps            = 59.94  # 29.97 for SD  # 24.976 for 'cinematic'
+Config.compress       = 0.05
 Config.progress_width = 80
 
 
