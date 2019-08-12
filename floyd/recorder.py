@@ -33,8 +33,8 @@ class MovieRecorder(TenkoObject):
         dt_frame = compress * interval  # ms of simulation per frame
         if dt_frame < State.dt:
             dt_frame = State.dt
-            self.out(f'Setting frame rate to {1/dt_frame!r} because implicit '
-                     f'interval was <dt ({State.dt!r})', warning=True)
+            self.out(f'Setting movie compression to {dt_frame*State.fps/1e3}: '
+                     f'implicit interval was <dt ({State.dt!r})', warning=True)
         self.dt_frame = dt_frame
 
         # Recording time tracking
