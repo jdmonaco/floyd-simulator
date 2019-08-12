@@ -37,7 +37,8 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         # Set up the intrinsic noise inputs (current-based only for rate-based
         # neurons. In interactive run mode, generators are used to provide
         # continuous noise.
-        self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise, seed=self.name)
+        self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise,
+                seed=self.name+'_ratenoise')
         if State.run_mode == RunMode.INTERACT:
             self.eta_gen = self.oup.generator()
             self.eta = next(self.eta_gen)

@@ -66,7 +66,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         # Set up the intrinsic noise inputs (current-based, excitatory
         # conductance-based, and inhibitory conductance-based). In interactive
         # run mode, generators are used to provide continuous noise.
-        self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise, seed=self.name)
+        self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise,
+                seed=self.name+'_current')
         self.oup_exc = OUNoiseProcess(N=self.N, tau=self.tau_noise_exc,
                 seed=self.name+'_excitatory', nonnegative=True)
         self.oup_inh = OUNoiseProcess(N=self.N, tau=self.tau_noise_inh,
