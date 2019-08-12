@@ -37,7 +37,6 @@ class Synapses(Specified, BaseUnitGroup):
         self.pre = pre
         self.post = post
         self.recurrent = pre is post
-        self.set_random_seed(seed)
 
         self.delay = None
         self.g_peak = self.g_max
@@ -52,15 +51,6 @@ class Synapses(Specified, BaseUnitGroup):
         if 'network' in State:
             State.network.add_synapses(self)
         self._initialized = True
-
-    def set_random_seed(self, seed):
-        """
-        Set random seed on `rnd` RandomState instance attribute from string.
-        """
-        seed = self.name if seed is None else seed
-        self._rand_seed = sum(list(map(ord, seed)))
-        self.rnd = np.random.RandomState(seed=self._rand_seed)
-        self.out(f'{self._rand_seed} [key: \'{seed}\']')
 
     def scale_constant(self):
         """
