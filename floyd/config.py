@@ -38,7 +38,7 @@ Config.progress_width = 80
 
 Config.title      = 'Network Simulation'
 Config.tag        = None
-Config.rnd_seed   = None
+Config.seed       = None
 Config.duration   = 200.0
 Config.dt         = 0.1
 Config.dt_rec     = 10.0

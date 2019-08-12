@@ -78,7 +78,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
 
     title      = Param(default=Config.title, doc="string, simulation title")
     tag        = Param(default=Config.tag, doc="string or None, simulation label")
-    rnd_seed   = Param(default=Config.rnd_seed, doc="string, random numbers seed key")
+    seed       = Param(default=Config.seed, doc="string, random numbers seed key")
     duration   = Param(default=Config.duration, doc="ms, simulation duration")
     dt         = Param(default=Config.dt, doc="ms, simulation timestep")
     dt_rec     = Param(default=Config.dt_rec, doc="ms, recording interval")
@@ -108,7 +108,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         and configured within the `setup_model()` implementation.
         """
         debug_mode(Config.show_debug)  # default to config before init
-        super().__init__(**kwargs)
+        super().__init__(spec_produce=('seed',), **kwargs)
         self.hline()
         debug_mode(self.show_debug)  # use instance attribute after init
         self._specfile_init = kwargs.get('specfile')
@@ -181,9 +181,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # Final point at which `show_debug` could possibly change
         debug_mode(self.show_debug)
 
-        # Set the RNG seed if a seed key was provided
-        if self.rnd_seed:
-            self.set_default_random_seed(rnd_seed)
+        # Set the seed for the default random number generator state
+        self.set_default_random_seed(self.seed)
 
         # Write JSON defaults file for parameters
         dfpath = self.write_json(specdefaults, DFLTFILE, base='context')
