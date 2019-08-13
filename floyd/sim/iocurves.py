@@ -21,24 +21,24 @@ class InputOutputCurves(FloydContext):
     # Simulation parameters
     title      = "Input/Output Analysis of Neurons"
     duration   = 5000.0   # ms total simulation length
-    dt         = 0.1      # ms single-update timestep
-    dt_rec     = 0.1      # ms recording sample timestep
+    dt         = 0.2      # ms single-update timestep
+    dt_rec     = 0.2      # ms recording sample timestep
     dt_block   = 25.0     # ms dashboard update timestep
     figw       = 9.0      # inches main figure width
     figh       = 9.0      # inches main figure height
-    tracewin   = 100.0    # ms trace plot window
+    tracewin   = 200.0    # ms trace plot window
     calcwin    = 50.0     # ms rolling calculation window
 
     # Model parameters
     N           = Param(default=100, doc='number of neurons')
     N_pulses    = Param(default=33, doc='number of test pulses')
-    N_ex_cells  = Param(default=5, doc='number of examples cells for traces')
+    N_ex_cells  = Param(default=6, doc='number of examples cells for traces')
     max_current = Param(default=1e3, units='pA', doc='peak pulse stimulation')
     modeltype   = Param(default='Brette_AEIF', doc="'LIF'|'AEIF'")
     neurontype  = Param(default='pyr', doc="'int'|'pyr'")
     I_noise     = Param(default=0.0, doc='noisy input current gain')
-    g_tonic_exc = Param(default=6.0, doc='noisy excitatory input conductance')
-    g_tonic_inh = Param(default=9.0, doc='noisy inhibitory input conductance')
+    g_tonic_exc = Param(default=0.0, doc='tonic excitatory input conductance')
+    g_tonic_inh = Param(default=0.0, doc='tonic inhibitory input conductance')
 
     def setup_model(self):
 
@@ -65,10 +65,7 @@ class InputOutputCurves(FloydContext):
             raise ValueError(f'unknown neuron model: {key!r}')
 
         # Initialize voltage and hetergeneous excitability
-        group.set(
-                v = group.E_L,
-                excitability = PositiveGaussianSampler(1.0, 0.1),
-        )
+        group.excitability = PositiveGaussianSampler(1.0, 0.1)
 
         # Create the step-pulse DC-current stimulator
         pulses = step_pulse_series(N_pulses, duration, max_current)
@@ -145,17 +142,17 @@ class InputOutputCurves(FloydContext):
         simplot.init(init_figure)
 
     @step
-    def plot_firing(self):
+    def plot_firing(self, tag=None):
         """
         Plot a simple figure of spiking and voltage traces.
         """
         fig = self.figure('iocurves', clear=True, figsize=(11,3.7),
                 title=f'Stepped Series Stimulation of IOGroup')
 
-        t = self.read_array('t', step='collect_data')
-        v = self.read_array('v', step='collect_data')
-        iapp = self.read_array('I_app', step='collect_data')
-        spikes = self.read_dataframe('spikes', step='collect_data')
+        t = self.read_array('t', step='collect_data', tag=tag)
+        v = self.read_array('v', step='collect_data', tag=tag)
+        iapp = self.read_array('I_app', step='collect_data', tag=tag)
+        spikes = self.read_dataframe('spikes', step='collect_data', tag=tag)
         self.out(f'Found {len(spikes)} spikes')
 
         # Plot the applied current
