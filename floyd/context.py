@@ -125,24 +125,6 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         Implicit method that prepares for an imminent simulation.
         """
-        step = self.current_step()
-        tag = self.current_tag()
-        if step:
-            rundir = os.path.join(self._ctxdir, step)
-            if tag: prev_rundir += '+{}'.format(sluggify(tag))
-
-            # Load a previous specfile from the anticipated rundir path
-            spath = os.path.join(rundir, SPECFILE)
-            try:
-                sfdata = self.read_json(spath)
-            except Exception as e:
-                self.debug(spath, prefix=f'SpecFileNotFound')
-            else:
-                self.update(sfdata)
-                self.out(spath, prefix=f'LoadedSpecFile')
-            finally:
-                debug_mode(self.show_debug)
-
         # Update from an alternative specfile if one was provided
         specfile = kwargs.pop('specfile', self._specfile_init)
         found_specfile = None

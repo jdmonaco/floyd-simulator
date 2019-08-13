@@ -71,7 +71,7 @@ class Network(TenkoObject):
             value='spec' if State.specfile is None else State.specfile)
         notes_input = TextInput(name='Notes',
             placeholder='Describe the results...')
-        notes_txt = Markdown('', height=50)
+        notes_txt = Markdown('', height=150)
         filename_txt = Markdown('' if State.specpath is None else
                                 State.specpath)
         uniquify_box = Checkbox(name='Force unique', value=False)
