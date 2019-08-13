@@ -94,7 +94,6 @@ class BretteAEIFPyramids(AEIFNeuronGroup):
     E_inh         = -75.0
     E_exc         = 0.0
     V_t           = -50.4
-    V_r           = -46.0
     V_thr         = 20.0
     delta         = 2.0
     a             = 4.0
@@ -103,5 +102,5 @@ class BretteAEIFPyramids(AEIFNeuronGroup):
     tau_noise     = 10.0
     tau_noise_exc = 2.728
     tau_noise_inh = 10.49
-    g_noise_exc   = 10.0
-    g_noise_inh   = 15.0
+    g_noise_exc   = 4.0
+    g_noise_inh   = 6.0

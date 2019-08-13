@@ -18,8 +18,8 @@ class AEIFNeuronGroup(COBANeuronGroup):
 
     g_L           = 25.0
     E_L           = -58.0
-    g_tonic_exc   = 10.0
-    g_tonic_inh   = 15.0
+    g_tonic_exc   = 2.0
+    g_tonic_inh   = 3.0
     delta         = Slider(default=1.0, units='mV', start=0.5, end=4.0, step=0.1, doc='slope factor')
     V_t           = Slider(default=-50.0, units='mV', start=-65, end=-20, step=0.1, doc='voltage threshold')
     V_thr         = 20.0
@@ -28,6 +28,10 @@ class AEIFNeuronGroup(COBANeuronGroup):
     tau_w         = Slider(default=30.0, units='ms', start=1.0, end=400, step=5, doc='adaptation time-constant')
 
     extra_variables = ('w',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.V_r = self.E_L
 
     def update_voltage(self):
         """
@@ -45,7 +49,7 @@ class AEIFNeuronGroup(COBANeuronGroup):
         """
         self.w[self.spikes] += self.b
         self.w += (State.dt / self.tau_w) * (
-                    self.a*(self.v - self.V_r) - self.w
+                    self.a*(self.v - self.E_L) - self.w
         )
 
     def update_currents(self):
