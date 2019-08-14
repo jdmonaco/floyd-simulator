@@ -219,6 +219,13 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         raise NotImplementedError('models must implement setup_model()')
 
+    @simulate(mode='record')
+    def export_network_data(self):
+        """
+        Convenience 'simulation' method that just exports network data.
+        """
+        State.network.export_graphs(tag=self.current_tag())
+
     @simulate
     def create_movie(self, specfile=None, dpi=None, fps=None, compress=None):
         """
