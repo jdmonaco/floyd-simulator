@@ -10,9 +10,11 @@ import functools
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
 from pouty import debug_mode, printf
 from roto.dicts import pprint as dict_pprint
+from roto.strings import sluggify
 from tenko.base import TenkoObject
 
 from .state import State, RunMode
@@ -404,3 +406,49 @@ class Network(TenkoObject):
         Display a list of object counts for the current network.
         """
         self.out.printf(dict_pprint(self.counts, name=self.name))
+
+    def export_graphs(self, tag=None):
+        """
+        Save weighted connectivity graph matrixes to external data files.
+        """
+        fn = '{}-network'.format(State.context._projname)
+        if tag: fn += '+{}'.format(sluggify(tag))
+        savepath = State.context.path(fn, base='context', unique=True)
+        data = {}
+
+        self.out('Calculating resultant synaptic weight matrixes...')
+        for name, syn in self.synapses.items():
+            post_pre_name = f'{syn.post.name}_{syn.pre.name}'
+            g_post = syn.post[f'g_{post_pre_name}']
+            W = 10**g_post * syn.g_peak * syn.S
+            data[post_pre_name] = W
+
+        self.out('Constructing omnibus network matrix...')
+        groups = list(self.neuron_groups.values())
+        W_omni = None
+        for post in groups:
+            W = None
+            for pre in groups:
+                g_name = f'g_{post.name}_{pre.name}'
+                if g_name not in post.synapses:
+                    W_ = np.zeros((post.N, pre.N))
+                else:
+                    syn = post.synapses[g_name]
+                    W_ = 10**post[g_name] * syn.g_peak * syn.S
+                    if syn.transmitter == 'GABA':
+                        W_ *= -1
+                if W is None:
+                    W = W_
+                else:
+                    W = np.hstack((W, W_))
+            if W_omni is None:
+                W_omni = W
+            else:
+                W_omni = np.vstack((W_omni, W))
+        data['W_all'] = W_omni
+
+        self.out(list(data.keys()), prefix='WeightMatrixes')
+        self.out('Saving compressed weight matrix data...')
+        np.savez_compressed(savepath, **data)
+
+        self.out(savepath, prefix='NetworkExported')
