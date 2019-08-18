@@ -2,7 +2,7 @@
 Base simulator context.
 """
 
-__all__ = ['SimulatorContext', 'simulate', 'step']
+__all__ = ('SimulatorContext', 'simulate', 'step')
 
 
 try:
@@ -20,6 +20,7 @@ import panel as pn
 
 from specify import Specified, Param
 from tenko.context import AbstractBaseContext, step
+from tenko.state import Tenko
 from maps.geometry import EnvironmentGeometry
 from roto.strings import sluggify
 from pouty.console import snow as hilite
@@ -117,6 +118,18 @@ class SimulatorContext(Specified, AbstractBaseContext):
 
     def __str__(self):
         return AbstractBaseContext.__str__(self)
+
+    def get_state(self):
+        """
+        Helper method to access the shared state for the context.
+        """
+        return State
+
+    def reset_state(self):
+        """
+        Helper method to reset the shared state for the context.
+        """
+        State.reset_state()
 
     def printspec(self):
         self.printf(Specified.__str__(self))
@@ -263,7 +276,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
 
     @simulate
     def launch_dashboard(self, specfile=None, return_panel=False,
-        threaded=False, dpi=Config.screendpi):
+        threaded=False, dpi=Tenko.screendpi):
         """
         Construct an interactive Panel dashboard for running the model.
         """
