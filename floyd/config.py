@@ -2,14 +2,11 @@
 Shared configuration for the floyd simulator.
 """
 
-__all__ = ['Config']
+__all__ = ('Config',)
 
 
 from roto.dicts import AttrDict
-
-from toolbox import IMACPRO_DPI, LG_ULTRAWIDE_DPI
-
-from .state import RunMode
+from tenko.state import Tenko
 
 
 class FloydConfig(AttrDict):
@@ -24,12 +21,11 @@ Config = FloydConfig()
 #
 
 Config.name           = 'floyd'
-Config.figdpi         = IMACPRO_DPI
-Config.moviedpi       = LG_ULTRAWIDE_DPI
-Config.screendpi      = LG_ULTRAWIDE_DPI
+Config.figdpi         = Tenko.screendpi
+Config.moviedpi       = Tenko.screendpi
 Config.fps            = 59.94  # 29.97 for SD  # 24.976 for 'cinematic'
-Config.compress       = 0.05
-Config.progress_width = 80
+Config.compress       = 0.05  # simulation time rate of videos
+Config.progress_width = 80   # number of characters in the progress bar
 
 
 #
