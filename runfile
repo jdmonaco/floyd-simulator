@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-# toolbox runfile
+# Toolbox runfile
 
 USAGE="Usage: run -e|(m)vim|(un)install|exportenv|ipython|cluster|notebook"
 
@@ -20,26 +20,24 @@ fi
 # as a usage statement.
 
 
-SESSFILE="$HOME/local/vim/sessions/toolbox.vim"
+SESSFILE="$HOME/projects/toolbox/session.vim"
 NBDIR="$HOME/projects/toolbox/notebooks"
 
 function __conda_check {
     if [[ "${CONDA_DEFAULT_ENV+x}" ]]; then
-        if [[ "$CONDA_DEFAULT_ENV" != "toolbox" ]]; then
-            echo "Wrong environment ($CONDA_DEFAULT_ENV). Please switch to the"
-            echo "'toolbox' environment with 'conda activate toolbox'."
+        if [[ "$CONDA_DEFAULT_ENV" != "/Users/joe/projects/toolbox/conda" ]]; then
+            echo "Wrong environment ($CONDA_DEFAULT_ENV). Please activate "
+            echo "'toolbox' with 'conda activate /Users/joe/projects/toolbox/conda'."
             exit 1
         fi
     else
-        echo "Please run 'conda activate toolbox' first."
+        echo "Please run 'conda activate /Users/joe/projects/toolbox/conda' first."
         exit 2
     fi
 }
 
 
 case "$runcmd" in
-
-created) cat ./.created ;;
 
 vim)
     if [[ -r "$SESSFILE" ]]; then
@@ -66,21 +64,14 @@ uninstall)
     pip uninstall -y toolbox
     ;;
 
-exportenv)
-    __conda_check
-    conda env export -f environment.yml && \
-        git add environment.yml && \
-        git diff --cached
-    ;;
-
 ipython)
     __conda_check
-    ipython --profile=toolbox
+    ipython --profile-dir="/Users/joe/projects/toolbox/ipython"
     ;;
 
 cluster)
     __conda_check
-    ipcluster start --profile=toolbox
+    ipcluster start --profile-dir="/Users/joe/projects/toolbox/ipython"
     ;;
 
 notebook)
