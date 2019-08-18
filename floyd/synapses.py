@@ -2,7 +2,7 @@
 Groups of synaptic connections between a pair of neuron groups.
 """
 
-__all__ = ['Synapses', ]
+__all__ = ('Synapses',)
 
 
 from toolbox.numpy import *

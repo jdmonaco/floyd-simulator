@@ -2,7 +2,7 @@
 Markdown tables of neuron group statistics.
 """
 
-__all__ = ['MarkdownTable', 'TableMaker', ]
+__all__ = ('MarkdownTable', 'TableMaker',)
 
 
 from tenko.base import TenkoObject

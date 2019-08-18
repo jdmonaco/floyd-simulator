@@ -2,7 +2,7 @@
 Spatial layouts for neuron groups including hexagonal grids.
 """
 
-__all__ = ['HexagonalDiscLayout', ]
+__all__ = ('HexagonalDiscLayout',)
 
 
 import queue

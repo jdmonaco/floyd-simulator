@@ -2,7 +2,7 @@
 Global state for simulations.
 """
 
-__all__ = ['State', 'RunMode']
+__all__ = ('State', 'RunMode')
 
 
 import enum

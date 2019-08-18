@@ -2,7 +2,7 @@
 Simulation plotting for interactive dashboards or batched movie creation.
 """
 
-__all__ = ['SimulationPlotter', ]
+__all__ = ('SimulationPlotter',)
 
 
 import functools

@@ -2,7 +2,7 @@
 Record state, model variables, and spike/event data across a simulation.
 """
 
-__all__ = ['MovieRecorder', 'ModelRecorder']
+__all__ = ('MovieRecorder', 'ModelRecorder')
 
 
 import numpy as np

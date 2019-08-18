@@ -2,7 +2,7 @@
 Create frozen noise sigals for background synaptic stochasticity.
 """
 
-__all__ = ['OUNoiseProcess']
+__all__ = ('OUNoiseProcess',)
 
 
 import matplotlib.pyplot as plt

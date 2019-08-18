@@ -2,9 +2,9 @@
 Helper functions to create model neurons from specific references.
 """
 
-__all__ = ['DonosoLIFInterneurons', 'DonosoLIFPyramids',
+__all__ = ('DonosoLIFInterneurons', 'DonosoLIFPyramids',
            'MalerbaAEIFInterneurons', 'MalerbaAEIFPyramids',
-           'BretteAEIFPyramids']
+           'BretteAEIFPyramids')
 
 
 from . import LIFNeuronGroup, AEIFNeuronGroup

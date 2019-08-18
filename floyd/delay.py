@@ -2,7 +2,7 @@
 Delay lines for signal propagation.
 """
 
-__all__ = ['DelayLines', ]
+__all__ = ('DelayLines',)
 
 
 from numpy import broadcast_to, zeros, arange, array

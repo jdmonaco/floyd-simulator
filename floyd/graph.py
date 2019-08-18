@@ -2,7 +2,7 @@
 Network graph figure.
 """
 
-__all__ = ['NetworkGraph', ]
+__all__ = ('NetworkGraph',)
 
 
 import networkx as nx
@@ -13,6 +13,7 @@ import matplotlib.patheffects as path_effects
 from toolbox.numpy import *
 
 from tenko.base import TenkoObject
+from tenko.state import Tenko
 
 from .config import Config
 from .state import State
@@ -63,7 +64,7 @@ class NetworkGraph(TenkoObject):
         """
         if ax is None:
             self.fig = plt.figure(num='network-graph', clear=True,
-                    figsize=figsize, dpi=Config.screendpi)
+                    figsize=figsize, dpi=Tenko.screendpi)
             self.ax = plt.axes([0,0,1,1])
             self.ax.set_axis_off()
         else:

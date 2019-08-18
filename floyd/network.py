@@ -2,7 +2,7 @@
 Network representation of groups and pathways as nodes and edges.
 """
 
-__all__ = ['Network']
+__all__ = ('Network',)
 
 
 import time

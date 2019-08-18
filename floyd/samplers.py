@@ -2,9 +2,9 @@
 Probabilistic sampling functions.
 """
 
-__all__ = ['SamplerFunc', 'RandomSampler', 'GaussianSampler',
+__all__ = ('SamplerFunc', 'RandomSampler', 'GaussianSampler',
            'LognormalSampler', 'ClippedGaussianSampler',
-           'ClippedLognormalSampler', 'PositiveGaussianSampler']
+           'ClippedLognormalSampler', 'PositiveGaussianSampler')
 
 
 import scipy.stats as st

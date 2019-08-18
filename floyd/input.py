@@ -2,7 +2,7 @@
 Functions to generate simulation inputs.
 """
 
-__all__ = ['step_pulse_series', 'triangle_wave', 'InputStimulator', ]
+__all__ = ('step_pulse_series', 'triangle_wave', 'InputStimulator',)
 
 
 from collections import namedtuple
