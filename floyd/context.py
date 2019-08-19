@@ -13,6 +13,7 @@ except ImportError:
 import os
 import time
 import functools
+from importlib import import_module
 
 from matplotlib.animation import FuncAnimation
 from panel.pane import Matplotlib, Markdown
@@ -35,6 +36,8 @@ from .config import Config
 SPECFILE = 'specs.json'
 DFLTFILE = 'defaults.json'
 
+
+# Simulator method decorators
 
 def simulate(func=None, *, mode=None):
     """
@@ -69,6 +72,18 @@ def simulate(func=None, *, mode=None):
         self._step_exit(func, args, kwargs, status)
         return res
     return wrapped
+
+def inheritable(setup_model):
+    """
+    Use this decorator on setup_model methods in classes that are intended to
+    be subclassed. See setup_model doc string for more details.
+    """
+    @functools.wraps(setup_model)
+    def inheritable_setup_model(self):
+        myglobal = import_module(setup_model.__module__).__dict__
+        myglobal.update(self.get_global_scope())
+        setup_model(self)
+    return inheritable_setup_model
 
 
 class SimulatorContext(Specified, AbstractBaseContext):
@@ -109,7 +124,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         and configured within the `setup_model()` implementation.
         """
         debug_mode(Config.show_debug)  # default to config before init
-        super().__init__(spec_produce=('seed',), **kwargs)
+        super().__init__(spec_produce=('seed', 'tag'), **kwargs)
         self.hline()
         debug_mode(self.show_debug)  # use instance attribute after init
         self._specfile_init = kwargs.get('specfile')
@@ -225,10 +240,18 @@ class SimulatorContext(Specified, AbstractBaseContext):
             self.out('- {} ({})', k, 'x'.join(list(map(str, getattr(E,
                 k).shape))), prefix='Geometry', hideprefix=True)
 
-    def setup_model(self, *args, **kwargs):
+    def setup_model(self):
         """
         Model construction: This method must be overridden by subclasses to
         define the model that will be simulated.
+
+        If your model class is intended to be subclassed so as to use the
+        setup_model definition (by MRO or super()), then you must decorate your
+        setup_model method with the @inheritable decorator. This decorator will
+        clone the subclass' global scope into the global scope of the class
+        with the setup_model definition. Otherwise, only the subclass' module
+        can access model parameters, etc., and the setup_model implementation
+        will fail when looking up parameter names.
         """
         raise NotImplementedError('models must implement setup_model()')
 
