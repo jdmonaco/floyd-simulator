@@ -55,7 +55,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         elif layout:
             if not hasattr(layout, 'compute'):
                 layout = HexLayout(**layout)
-            layout.compute(context=State.context)
+            layout.compute()
             self.layout = layout
             self.N = self.layout.N
         else:
@@ -80,9 +80,9 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
             self.eta_exc = next(self.eta_gen_exc)
             self.eta_inh = next(self.eta_gen_inh)
         else:
-            self.oup.compute(context=State.context)
-            self.oup_exc.compute(context=State.context)
-            self.oup_inh.compute(context=State.context)
+            self.oup.compute()
+            self.oup_exc.compute()
+            self.oup_inh.compute()
             self.eta = self.oup.eta[...,0]
             self.eta_exc = self.oup_exc.eta[...,0]
             self.eta_inh = self.oup_inh.eta[...,0]
@@ -92,13 +92,13 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         self.S_exc = {}
         self.synapses = {}
 
-        # Add any conductance gain values in the shared context as Params
+        # Copy & import any conductance gain Params from the shared context
         self.gain_keys = []
         self.gain_param_base = LogSlider(default=0.0, start=g_log_range[0],
                 end=g_log_range[1], step=g_step, units='nS')
-        for k, v in vars(State.context.__class__).items():
-            if k.startswith(f'g_{name}_'):
-                self._add_gain_spec(k, v)
+        for pname, param in State.context.params():
+            if pname.startswith(f'g_{name}_'):
+                self._add_context_gain_param(pname, param)
 
         # Initialize metrics and variables
         self.activity = FiringRateWindow(self)
@@ -118,7 +118,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         if 'network' in State:
             State.network.add_neuron_group(self)
 
-    def _add_gain_spec(self, gname, value):
+    def _add_context_gain_param(self, gname, param):
         """
         Add Param (slider) objects for any `g_{post.name}_{pre.name}` class
         attributes (Param object or just default values) of the shared context.
@@ -127,21 +127,18 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         new_param = copy.copy(self.gain_param_base)
         new_param.doc = f'{pre}->{post} max conductance'
         new_all_slots = get_all_slots(type(new_param))
+        ctx_all_slots = get_all_slots(type(param))
 
-        if is_param(value):
-            old_all_slots = get_all_slots(type(value))
-            for k in old_all_slots:
-                if hasattr(value, k) and getattr(value, k) is not None and \
-                        k in new_all_slots:
-                    slotval = copy.deepcopy(getattr(value, k))
-                    object.__setattr__(new_param, k, slotval)
-            value = new_param.default
-        else:
-            new_param.default = copy.deepcopy(value)
+        for k in ctx_all_slots:
+            if k not in new_all_slots or k == 'doc':
+                continue
+            if hasattr(param, k) and getattr(param, k) is not None:
+                value = copy.deepcopy(getattr(param, k))
+                object.__setattr__(new_param, k, value)
 
-        self.add_param(gname, new_param)
+        self.add_param(gname, new_param, value=State.context[gname])
         self.gain_keys.append(gname)
-        self.debug(f'added gain {gname!r} with value {new_param.default!r}')
+        self.debug(f'added gain {gname!r} with value {self[gname]!r}')
 
     def add_synapses(self, synapses):
         """
@@ -169,7 +166,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         if gname in self.gain_keys:
             self.debug(f'found gain spec {gname!r} for {synapses.name!r}')
         else:
-            self._add_gain_spec(gname, 0.0)
+            self._add_context_gain_param(gname, 0.0)
             self.debug(f'added gain spec {gname!r} for {synapses.name!r}')
 
     def update(self):
