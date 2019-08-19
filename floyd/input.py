@@ -2,7 +2,7 @@
 Functions to generate simulation inputs.
 """
 
-__all__ = ('step_pulse_series', 'triangle_wave', 'InputStimulator',)
+__all__ = ('step_pulse_series', 'triangle_wave', 'InputStimulator')
 
 
 from collections import namedtuple
@@ -75,8 +75,8 @@ class InputStimulator(TenkoObject):
                 try:
                     getattr(target, variable)[stimulate]
                 except IndexError as e:
-                    State.context.out('bad target index for {}.{}'.format(
-                        target, variable), prefix=self.klass, error=True)
+                    self.out('bad target index for {}.{}'.format(target,
+                             variable), error=True)
                     raise e
                 else:
                     self.index = stimulate

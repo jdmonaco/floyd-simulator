@@ -62,10 +62,12 @@ def simulate(func=None, *, mode=None):
 
         # Call the user-defined model setup method and display the network
         self.setup_model()
-        State.context.hline()
+        self.hline()
         State.network.display_neuron_groups()
         State.network.display_projections()
         State.network.display_object_counts()
+        if mode == RunMode.ANIMATE:
+            self.hline()
 
         # Execute the requested simulation loop
         res = self._step_execute(func, args, kwargs, status)
@@ -195,7 +197,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
         self.set_default_random_seed(self.seed)
 
         # Write JSON defaults file for parameters
-        dfpath = self.write_json(specdefaults, DFLTFILE, base='context')
+        dfpath = self.write_json(specdefaults, DFLTFILE, base='context',
+                                 sort=True)
         self.out(dfpath, prefix='WroteDefaultsFile')
 
         # We want to process parameter updates and write out the defaults file
@@ -211,7 +214,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         self.printspec()
 
         # Write JSON spec file of current parameter values
-        sfpath = self.write_json(specdict, SPECFILE)
+        sfpath = self.write_json(specdict, SPECFILE, sort=True)
         self.out(sfpath, prefix='WroteSpecFile')
 
         # Initialize the simulation network object and assign to an instance
@@ -263,7 +266,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
         State.network.export_graphs(tag=self.current_tag())
 
     @simulate
-    def create_movie(self, specfile=None, dpi=None, fps=None, compress=None):
+    def create_movie(self, specfile=None, dpi=None, fps=None, compress=None,
+        autoplay=True):
         """
         Simulate the model in batch mode for movie generation.
         """
@@ -283,7 +287,10 @@ class SimulatorContext(Specified, AbstractBaseContext):
                 ext='mp4')
         anim.save(self.path(self.c.movie_file), fps=State.fps, dpi=dpi)
         State.simplot.closefig()
-        self.play_movie()
+
+        # Play the movie automatically if requested
+        if autoplay:
+            self.play_movie()
 
     @simulate
     def collect_data(self, specfile=None):
