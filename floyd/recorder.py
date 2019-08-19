@@ -29,13 +29,19 @@ class MovieRecorder(TenkoObject):
         # Compute the implicit frame interval from fps and compression
         State.fps = Config.fps if fps is None else fps
         compress = Config.compress if compress is None else compress
-        interval = 1e3 / State.fps  # ms / video frame
-        dt_frame = compress * interval  # ms of simulation per frame
-        if dt_frame < State.dt:
-            dt_frame = State.dt
-            self.out(f'Setting movie compression to {dt_frame*State.fps/1e3}: '
-                     f'implicit interval was <dt ({State.dt!r})', warning=True)
-        self.dt_frame = dt_frame
+        self.framelock = False
+        if compress == 'dt':
+            self.dt_frame = State.dt
+            self.framelock = True
+        else:
+            interval = 1e3 / State.fps  # ms / video frame
+            dt_frame = compress * interval  # ms of simulation per frame
+            if dt_frame < State.dt:
+                dt_frame = State.dt
+                self.out(f'Setting movie compression to '
+                         f'{dt_frame*State.fps/1e3}: implicit interval was '
+                         f'<dt ({State.dt!r})', warning=True)
+            self.dt_frame = dt_frame
 
         # Recording time tracking
         ts = np.arange(0, State.duration + self.dt_frame, self.dt_frame)
@@ -52,7 +58,7 @@ class MovieRecorder(TenkoObject):
         Advance the timing of the recorder and return True for a new frame.
         """
         # Use a modulo calculation to determine when a new frame should occur
-        if self.dt_frame > State.dt:
+        if not self.framelock:
             _frame_mod = State.t % self.dt_frame
             between_frames = _frame_mod >= self._frame_mod
             self._frame_mod = _frame_mod
@@ -60,11 +66,10 @@ class MovieRecorder(TenkoObject):
                 return False
 
         # Update recording index and time
-        if self.n_frame >= self.N_t_frame:
-            self.out('Movie complete (t = {:.3f} ms)', self.ts_frame[-1])
-            return False
         self.n_frame += 1
         self.t_frame = self.ts_frame[self.n_frame]
+        if self.n_frame >= self.N_t_frame - 1:
+            return False
         return True
 
 
@@ -252,14 +257,18 @@ class ModelRecorder(TenkoObject):
             State.t += State.dt
             return
         if not self:
-            State.context.hline()
-            compl_msg = f'Simulation complete: n = {State.n - 1:g} frames'
+            self.out.hline()
+            compl_msg = f'Simulation complete: n = {State.n - 1:g} timesteps'
             if State.run_mode == RunMode.RECORD:
-                compl_msg += f'; n_rec = {self.N_t_rec:g} samples'
+                compl_msg += f' / {self.N_t_rec:g} samples'
+            elif State.run_mode == RunMode.ANIMATE:
+                N_frames = State.movie_recorder.N_t_frame
+                compl_msg += f' / {N_frames:g} video frames'
             self.out(compl_msg, anybar='green')
+            self.out.hline()
             return
         if State.n == 0:
-            State.context.hline()
+            self.out.hline()
 
         # Update simulation time and progress bar output
         State.t = State.ts[State.n]
@@ -300,7 +309,7 @@ class ModelRecorder(TenkoObject):
 
         # Update recording index and time
         if self.n_rec >= self.N_t_rec:
-            self.out('Recording complete (t = {:.3f} ms)', self.ts_rec[-1])
+            self.out('Recording complete: n = {self.N_t_rec} samples')
             return
         self.n_rec += 1
         self.t_rec = self.ts_rec[self.n_rec]
@@ -320,7 +329,7 @@ class ModelRecorder(TenkoObject):
         State.progress = pct = (State.n + 1) / State.N_t
         barpct = self.Nprogress / Config.progress_width
         while barpct < pct:
-            State.context.box(filled=filled, color=color)
+            self.out.box(filled=filled, color=color)
             self.Nprogress += 1
             barpct = self.Nprogress / Config.progress_width
 

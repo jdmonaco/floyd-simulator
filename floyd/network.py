@@ -157,11 +157,12 @@ class Network(TenkoObject):
         @throttle
         def zero(value):
             State.context.toggle_anybar()
-            self.debug('disconnet button callback')
+            self.debug('disconnect button callback')
             for grp in self.neuron_groups.values():
                 for gname in grp.gain_keys:
                     if gname in grp._widgets:
-                        grp._widgets[gname].value = 0.0
+                        slider = grp._widgets[gname]
+                        slider.value = slider.start  # log-slider -> min.
 
         # Add callback functions to the buttons and save the watcher objects
         for name, btn in self.buttons.items():
@@ -204,15 +205,21 @@ class Network(TenkoObject):
         For animation mode, run enough timesteps for a video frame of the movie
         and return updated artists.
         """
-        new_frame = False
-        while not new_frame:
+        if State.movie_recorder.framelock:
             self.model_update()
             State.simplot.update_traces_data()
-            new_frame = State.movie_recorder.update()
-            if new_frame and State.show_debug:
-                self.debug('frame n = {.n_frame}, t = {.t_frame}',
-                           State.movie_recorder, State.movie_recorder)
+            State.movie_recorder.update()
+        else:
+            new_frame = False
+            while not new_frame and State.recorder:
+                self.model_update()
+                State.simplot.update_traces_data()
+                new_frame = State.movie_recorder.update()
         self.display_update()
+
+        if State.show_debug:
+            self.debug('frame n = {.n_frame}, t = {.t_frame}',
+                       State.movie_recorder, State.movie_recorder)
         return State.simplot.artists
 
     def model_update(self):
