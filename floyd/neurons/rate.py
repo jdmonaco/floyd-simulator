@@ -43,7 +43,7 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
             self.eta_gen = self.oup.generator()
             self.eta = next(self.eta_gen)
         else:
-            self.oup.compute(context=State.context)
+            self.oup.compute()
             self.eta = self.oup.eta[...,0]
 
         # Initialize data structures
