@@ -143,8 +143,10 @@ class Synapses(Specified, BaseUnitGroup):
         Connect two groups of neurons with a synaptic projection.
 
         Note: p can be True for all-to-all connectivity; float for fixed
-        probability; int for fixed fan-out; or a KernelFunc on the distance
-        between neurons that determines the probability of connection.
+        probability; int for fixed fan-out; a KernelFunc on the distance
+        between neurons that determines the probability of connection; or a
+        full, pre-computed weight matrix (ndarray object) of the correct shape
+        for all synapses, i.e., (post.N, pre.N).
         """
         if hasattr(self, 'active_post'):
             raise RuntimeError('already connected!')
@@ -162,6 +164,10 @@ class Synapses(Specified, BaseUnitGroup):
                 C[:,j] = self.rnd.random_shuffle(C[:,j])
         elif hasattr(p, 'apply'):
             self._kernel_connect(C, p, kernel_fanout, allow_multapses)
+        elif isinstance(p, ndarray) and p.shape == self.shape:
+            self._direct_connect(C, p)
+        else:
+            raise ValueError(f'invalid connection specification: {p!r}')
 
         # Process the connectivity matrix into some useful data structures
         self.ij = C.nonzero()
@@ -198,14 +204,23 @@ class Synapses(Specified, BaseUnitGroup):
             elif 0.0 <= fanout <= 1.0:
                 n += round(fanout*N_post)
             else:
-                raise ValueError(f'invalid fanout value ({fanout})')
+                raise ValueError(f'invalid fanout value: {fanout!r}')
         elif hasattr(fanout, 'sample'):
             n += fanout(N_pre, state=self.rnd).astype('i')
             n[n<0] = 0
         else:
-            raise ValueError(f'invalid fanout value ({fanout})')
+            raise ValueError(f'invalid fanout value: {fanout!r}')
 
         for j in range(N_pre):
             conn = self.rnd.choice(N_post, n[j], replace=multapses, p=p_k[:,j])
             for i in conn:
                 C[i,j] += 1  # multapses increment connection count
+
+    def _direct_connect(self, C, W_syn):
+        """
+        Implement an explicit specification of synaptic connectivity based on a
+        full, pre-computed weight matrix.
+        """
+        assert W_syn.shape == self.shape, f'shape mismatch: {W_syn.shape}'
+        C[W_syn.nonzero()] = 1
+        self.g_peak = W_syn
