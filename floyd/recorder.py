@@ -29,10 +29,8 @@ class MovieRecorder(TenkoObject):
         # Compute the implicit frame interval from fps and compression
         State.fps = Config.fps if fps is None else fps
         compress = Config.compress if compress is None else compress
-        self.framelock = False
         if compress == 'dt':
             self.dt_frame = State.dt
-            self.framelock = True
         else:
             interval = 1e3 / State.fps  # ms / video frame
             dt_frame = compress * interval  # ms of simulation per frame
@@ -49,28 +47,15 @@ class MovieRecorder(TenkoObject):
         self.N_t_frame = len(self.ts_frame)
         self.n_frame = -1  # video frame index
         self.t_frame = -self.dt_frame
-        self._frame_mod = np.inf  # frame trigger; inf triggers at t=0
 
         State.movie_recorder = self
 
     def update(self):
         """
-        Advance the timing of the recorder and return True for a new frame.
+        Advance the frame count and timing of the recorder.
         """
-        # Use a modulo calculation to determine when a new frame should occur
-        if not self.framelock:
-            _frame_mod = State.t % self.dt_frame
-            between_frames = _frame_mod >= self._frame_mod
-            self._frame_mod = _frame_mod
-            if between_frames:
-                return False
-
-        # Update recording index and time
         self.n_frame += 1
         self.t_frame = self.ts_frame[self.n_frame]
-        if self.n_frame >= self.N_t_frame - 1:
-            return False
-        return True
 
 
 class ModelRecorder(TenkoObject):
