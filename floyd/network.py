@@ -258,9 +258,9 @@ class Network(TenkoObject):
         self.out.hline()
         msg = f'Simulation complete: n = {State.n - 1:g} timesteps'
         if State.run_mode == RunMode.RECORD:
-            msg += f' / {State.recorder.N_t_rec:g} samples'
+            msg += f' / {State.recorder.clock.N_t:g} samples'
         elif State.run_mode == RunMode.ANIMATE:
-            N_frames = self.movie_recorder.N_t_frame
+            N_frames = self.movie_recorder.frame.N_t
             msg += f' / {N_frames:g} video frames'
         self.out(msg, anybar='green')
         self.out.hline()

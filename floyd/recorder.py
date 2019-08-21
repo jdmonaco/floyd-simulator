@@ -84,9 +84,9 @@ class ModelRecorder(TenkoObject):
         if State.run_mode != RunMode.RECORD:
             return
 
-        # Recording time tracking
-        ArrayClock(dt=State.dt_rec, duration=State.duration).add_callback(
-                self.update)
+        # Recording time tracking and update callback
+        self.clock = ArrayClock(dt=State.dt_rec, duration=State.duration)
+        self.clock.add_callback(self.update)
 
         # Data storage keyed by variable names
         self.unit_slices = dict()

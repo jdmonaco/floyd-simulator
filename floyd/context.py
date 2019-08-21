@@ -297,8 +297,11 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         Simulate the model in batch mode for data collection.
         """
-        while State.recorder:
-            State.network.model_update()
+        if State.recorder is None:
+            raise RunTimeError('no ModelRecorder is defined')
+
+        while State.simclock:
+            self.network.model_update()
 
         # Save simulation recording data
         self.set_anybar_color('blue')
