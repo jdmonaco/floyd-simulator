@@ -386,9 +386,10 @@ class SimulatorContext(Specified, AbstractBaseContext):
         control_columns = [pn.Column(gain_row, neuron_row),
                            pn.Column(*last_column)]
 
-        if self._widgets:
+        context_widgets = self.get_widgets()
+        if context_widgets:
             context_column = pn.WidgetBox(
-                        f'### Model controls', *self._widgets.values())
+                        f'### Model controls', *context_widgets)
             control_columns.insert(0, context_column)
 
         if table_txt:
