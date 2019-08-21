@@ -154,7 +154,7 @@ class Synapses(Specified, BaseUnitGroup):
 
         self.set(C=0, S=0)
         C = self.S  # accumulate no. of contacts if multapses allowed
-        if p == True:
+        if type(p) is bool and p == True:
             C += 1
         elif np.isscalar(p) and p == float(p):
             C[:] = self.rnd.random_sample(C.shape) < p
