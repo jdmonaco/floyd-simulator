@@ -77,16 +77,18 @@ def simulate(func=None, *, mode=None):
         return res
     return wrapped
 
-def inheritable(setup_model):
+def inheritable(setup_method):
     """
     Use this decorator on setup_model methods in classes that are intended to
     be subclassed. See setup_model doc string for more details.
     """
-    @functools.wraps(setup_model)
+    @functools.wraps(setup_method)
     def inheritable_setup_model(self):
-        myglobal = import_module(setup_model.__module__).__dict__
-        myglobal.update(self.get_global_scope())
-        setup_model(self)
+        if setup_method.__module__ != self.__class__.__module__:
+            myglobal = import_module(setup_method.__module__).__dict__
+            myglobal.update(self.get_global_scope())
+        result = setup_method(self)
+        return result
     return inheritable_setup_model
 
 
