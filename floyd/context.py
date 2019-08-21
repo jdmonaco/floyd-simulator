@@ -277,7 +277,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
                 fig       = State.simplot.fig,
                 func      = State.network.animation_update,
                 init_func = State.simplot.initializer,
-                frames    = movie_recorder.N_t_frame,
+                frames    = movie_recorder.frame.N_t,
                 repeat    = False,
                 blit      = True,
         )
@@ -286,6 +286,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         self.c['movie_file'] = self.filename(use_modname=True, use_runtag=True,
                 ext='mp4')
         anim.save(self.path(self.c.movie_file), fps=State.fps, dpi=dpi)
+        State.network.display_summary()
         State.simplot.closefig()
 
         # Play the movie automatically if requested

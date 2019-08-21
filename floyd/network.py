@@ -17,6 +17,7 @@ from roto.dicts import pprint as dict_pprint
 from roto.strings import sluggify
 from tenko.base import TenkoObject
 
+from .clocks import SimulationClock, ProgressBar
 from .state import State, RunMode
 
 
@@ -226,10 +227,10 @@ class Network(TenkoObject):
         """
         self.simclock.update()
         if self.show_progress:
-            self.progress_bar.update()
+            self.progressbar.update()
         for clock in self.clocks:
             clock.update()
-        if not simclock:
+        if not self.simclock:
             self.display_summary()
             return
 
@@ -256,7 +257,7 @@ class Network(TenkoObject):
         Emit a simulation completion message with summary of time/frames.
         """
         self.out.hline()
-        msg = f'Simulation complete: n = {State.n - 1:g} timesteps'
+        msg = f'Simulation complete: n = {State.N_t - 1:g} timesteps'
         if State.run_mode == RunMode.RECORD:
             msg += f' / {State.recorder.clock.N_t:g} samples'
         elif State.run_mode == RunMode.ANIMATE:

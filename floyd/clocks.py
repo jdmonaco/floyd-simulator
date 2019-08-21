@@ -4,7 +4,7 @@ Classes for timing events against the simulation time.
 
 __all__ = ('SimulationClock', 'ProgressBar', 'BaseClock', 'ArrayClock')
 
-from toolbox.numpy import inf
+from toolbox.numpy import inf, arange
 from pouty import box, hline, debug
 
 from .state import State, RunMode
@@ -18,11 +18,11 @@ class SimulationClock(object):
     """
 
     def __init__(self, *, t_start=0.0):
-        if State.simclock is not None:
+        if 'simclock' in State and State.simclock is not None:
             raise RuntimeError(f'simulation clock exists: {State.simclock!r}')
 
-        t_end = t_start + self.duration
-        ts = np.arange(t_start, t_end + State.dt, State.dt)
+        t_end = t_start + State.duration
+        ts = arange(t_start, t_end + State.dt, State.dt)
         State.ts = ts[ts <= t_end]
         State.N_t = len(State.ts)
         State.t = t_start - State.dt
@@ -45,6 +45,8 @@ class SimulationClock(object):
             return
         if State.n == 0:
             hline()
+        elif State.n >= State.N_t:
+            return
         State.t = State.ts[State.n]
 
 
@@ -54,7 +56,8 @@ class ProgressBar(object):
     Progress bar for tracking the advancement of the simulation.
     """
 
-    def __init__(self, nchars=Config.progress_width, filled=False, c='purple'):
+    def __init__(self, nchars=Config.progress_width, filled=False,
+        color='purple'):
         self.nchars = nchars
         self.filled = filled
         self.color = color
@@ -65,8 +68,8 @@ class ProgressBar(object):
         """
         Update the display of the progress bar.
         """
-        State.progress = frac = (State.n + 1) / State.N_t
-        while self.progfrac < frac:
+        State.progress = (State.n + 1) / State.N_t
+        while self.progfrac < State.progress:
             box(filled=self.filled, c=self.color)
             self.Nprogress += 1
             self.progfrac = self.Nprogress / self.nchars
@@ -115,7 +118,7 @@ class Clock(object):
             fn(self)
 
 
-class ArrayClock(BaseClock):
+class ArrayClock(Clock):
 
     """
     Clock for defined durations with timestep arrays.
@@ -126,7 +129,7 @@ class ArrayClock(BaseClock):
 
         self.duration = duration
         self.t_end = self.t_start + self.duration
-        ts = np.arange(self.t_start, self.t_end + self.dt, self.dt)
+        ts = arange(self.t_start, self.t_end + self.dt, self.dt)
         self.ts = ts[ts <= self.t_end]
         self.N_t = len(self.ts)
         self.t_next = self.ts[0]

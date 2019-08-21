@@ -49,3 +49,4 @@ State.network   = None
 State.recorder  = None
 State.context   = None
 State.simplot   = None
+State.simclock  = None

@@ -155,7 +155,7 @@ class ModelRecorder(TenkoObject):
         rdata = data[sl]
 
         dtype = data.dtype
-        self.traces[name] = np.zeros((self.N_t_rec,) + rdata.shape, dtype)
+        self.traces[name] = np.zeros((self.clock.N_t,) + rdata.shape, dtype)
         self.variables[name] = data
 
         self.debug(f'added variable monitor: {name!r}, dtype={dtype!r}, '
@@ -199,7 +199,7 @@ class ModelRecorder(TenkoObject):
         assert np.ndim(state_value) == 0, 'state value must be scalar'
 
         dtype = np.array(state_value).dtype
-        self.state_traces[name] = np.zeros(self.N_t_rec, dtype)
+        self.state_traces[name] = np.zeros(self.clock.N_t, dtype)
         State[name] = state_value
 
         self.debug(f'added state monitor: {name!r}, dtype={dtype!r}')
@@ -220,11 +220,11 @@ class ModelRecorder(TenkoObject):
 
         # Update data trace values
         for name, data in self.variables.items():
-            self.traces[name][self.n_rec] = data[self.unit_slices[name]]
+            self.traces[name][self.clock.n] = data[self.unit_slices[name]]
 
         # Update state trace values
         for name in self.state_traces.keys():
-            self.state_traces[name][self.n_rec] = State[name]
+            self.state_traces[name][self.clock.n] = State[name]
 
     def save(self, *path, **root):
         """
@@ -239,7 +239,7 @@ class ModelRecorder(TenkoObject):
                     columns=('unit', 't'))
             State.context.save_dataframe(df, *path, name, **root)
 
-        State.context.save_array(self.ts_rec, *path, 't', **root)
+        State.context.save_array(self.clock.ts, *path, 't', **root)
 
         for name, data in self.traces.items():
             State.context.save_array(data, *path, name, **root)
