@@ -11,6 +11,7 @@ import pandas as pd
 from tenko.base import TenkoObject
 
 from .state import State, RunMode
+from .clocks import ArrayClock
 from .config import Config
 
 
@@ -30,7 +31,7 @@ class MovieRecorder(TenkoObject):
         State.fps = Config.fps if fps is None else fps
         compress = Config.compress if compress is None else compress
         if compress == 'dt':
-            self.dt_frame = State.dt
+            dt_frame = State.dt
         else:
             interval = 1e3 / State.fps  # ms / video frame
             dt_frame = compress * interval  # ms of simulation per frame
@@ -39,23 +40,9 @@ class MovieRecorder(TenkoObject):
                 self.out(f'Setting movie compression to '
                          f'{dt_frame*State.fps/1e3}: implicit interval was '
                          f'<dt ({State.dt!r})', warning=True)
-            self.dt_frame = dt_frame
 
-        # Recording time tracking
-        ts = np.arange(0, State.duration + self.dt_frame, self.dt_frame)
-        self.ts_frame = ts[ts <= State.duration]
-        self.N_t_frame = len(self.ts_frame)
-        self.n_frame = -1  # video frame index
-        self.t_frame = -self.dt_frame
-
-        State.movie_recorder = self
-
-    def update(self):
-        """
-        Advance the frame count and timing of the recorder.
-        """
-        self.n_frame += 1
-        self.t_frame = self.ts_frame[self.n_frame]
+        self.frame = ArrayClock(dt=dt_frame, duration=State.duration)
+        State.network.set_movie_recorder(self)
 
 
 class ModelRecorder(TenkoObject):
@@ -81,7 +68,7 @@ class ModelRecorder(TenkoObject):
     integer index for selective recordings.
     """
 
-    def __init__(self, show_progress=True, **initial_values):
+    def __init__(self, **initial_values):
         """
         Add recording monitors for keyword-specified variables and states.
 
@@ -91,25 +78,15 @@ class ModelRecorder(TenkoObject):
         object with 'unit' and 't' columns. Spike/event dataframes are also
         saved to the context datafile in the `save_recordings` method.
         """
-        assert State.dt_rec >= State.dt, 'recording interval < simulation dt'
         super().__init__()
 
-        # Simulation time & progress tracking
-        State.ts = np.arange(0, State.duration + State.dt, State.dt)
-        State.N_t = len(State.ts)
-        State.n = -1  # simulation frame index, flag for unstarted simulation
-        State.t = -State.dt
-        self.Nprogress = 0
-        self.show_progress = show_progress and not (
-                     State.show_debug or State.run_mode == RunMode.INTERACT)
+        # Nothing to do here if we're not in a data collection simulation
+        if State.run_mode != RunMode.RECORD:
+            return
 
         # Recording time tracking
-        ts_rec = np.arange(0, State.duration + State.dt_rec, State.dt_rec)
-        self.ts_rec = ts_rec[ts_rec <= State.duration]
-        self.N_t_rec = len(self.ts_rec)
-        self.n_rec = -1  # recording frame index
-        self.t_rec = -State.dt_rec
-        self._rec_mod = np.inf  # recording trigger; inf triggers at t=0
+        ArrayClock(dt=State.dt_rec, duration=State.duration).add_callback(
+                self.update)
 
         # Data storage keyed by variable names
         self.unit_slices = dict()
@@ -125,37 +102,31 @@ class ModelRecorder(TenkoObject):
 
         # Use the keywords and intial values to automatically set up monitors
         # for model variables, states, and spike/event signals
-        if State.run_mode == RunMode.RECORD:
-            for name, data in initial_values.items():
-                record = True
-                if type(data) is tuple:
-                    if len(data) != 2:
-                        self.out('Tuple values must be length 2', warning=True)
-                        continue
-                    data, record = data
+        for name, data in initial_values.items():
+            record = True
+            if type(data) is tuple:
+                if len(data) != 2:
+                    self.out('Tuple values must be length 2', warning=True)
+                    continue
+                data, record = data
 
-                if isinstance(data, np.ndarray):
-                    if data.dtype == bool:
-                        self.add_spike_monitor(name, data, record=record)
-                    else:
-                        self.add_variable_monitor(name, data, record=record)
-                elif np.isscalar(data):
-                    try:
-                        state_value = float(data)
-                    except ValueError:
-                        self.out('Not a scalar: {!r}', data, warning=True)
-                        continue
-                    else:
-                        self.add_state_monitor(name, state_value)
+            if isinstance(data, np.ndarray):
+                if data.dtype == bool:
+                    self.add_spike_monitor(name, data, record=record)
                 else:
-                    self.out('Not an array or state: {!r}', data, warning=True)
+                    self.add_variable_monitor(name, data, record=record)
+            elif np.isscalar(data):
+                try:
+                    state_value = float(data)
+                except ValueError:
+                    self.out('Not a scalar: {!r}', data, warning=True)
+                    continue
+                else:
+                    self.add_state_monitor(name, state_value)
+            else:
+                self.out('Not an array or state: {!r}', data, warning=True)
 
         State.recorder = self
-
-    def __bool__(self):
-        if State.run_mode == RunMode.INTERACT:
-            return True
-        return State.n < State.N_t
 
     def _new_monitor_check(self, name):
         assert State.n == -1, 'simulation has already started'
@@ -233,37 +204,10 @@ class ModelRecorder(TenkoObject):
 
         self.debug(f'added state monitor: {name!r}, dtype={dtype!r}')
 
-    def update(self):
+    def update(self, clock=None):
         """
         Update the time series, variable monitors, and state monitors.
         """
-        State.n += 1
-        if State.run_mode == RunMode.INTERACT:
-            State.t += State.dt
-            return
-        if not self:
-            self.out.hline()
-            compl_msg = f'Simulation complete: n = {State.n - 1:g} timesteps'
-            if State.run_mode == RunMode.RECORD:
-                compl_msg += f' / {self.N_t_rec:g} samples'
-            elif State.run_mode == RunMode.ANIMATE:
-                N_frames = State.movie_recorder.N_t_frame
-                compl_msg += f' / {N_frames:g} video frames'
-            self.out(compl_msg, anybar='green')
-            self.out.hline()
-            return
-        if State.n == 0:
-            self.out.hline()
-
-        # Update simulation time and progress bar output
-        State.t = State.ts[State.n]
-        if self.show_progress:
-            self.progressbar()
-
-        # No recording in anything but data collection mode
-        if State.run_mode != RunMode.RECORD:
-            return
-
         # Record spike/event timing at every simulation timestep
         for name, data in self.events.items():
             recdata = data[self.unit_slices[name]]
@@ -274,31 +218,6 @@ class ModelRecorder(TenkoObject):
             self.units[name] = np.concatenate((self.units[name], units))
             self.timing[name] = np.concatenate((self.timing[name], timing))
 
-        # Variable and state data traces are sampled with the recording clock.
-        # Each sample is triggered by a modulo calculation of the simulation
-        # time with the parameterized recording interval. This calculation is
-        # bypassed by the conditional below if the sample interval `dt_rec` is
-        # equal to the simulation interval `dt`. (It can't be any lower, as an
-        # exception would be raised in the constructor.)
-        #
-        # The modulo calculation is that a sample is triggered when t % dt_rec
-        # is observed to *decrease* (meaning that the simulation wrapped around
-        # one full cycle of the sampling interval).
-        #
-        if State.dt_rec > State.dt:
-            _rec_mod = State.t % State.dt_rec
-            between_samples = _rec_mod >= self._rec_mod
-            self._rec_mod = _rec_mod
-            if between_samples:
-                return
-
-        # Update recording index and time
-        if self.n_rec >= self.N_t_rec:
-            self.out('Recording complete: n = {self.N_t_rec} samples')
-            return
-        self.n_rec += 1
-        self.t_rec = self.ts_rec[self.n_rec]
-
         # Update data trace values
         for name, data in self.variables.items():
             self.traces[name][self.n_rec] = data[self.unit_slices[name]]
@@ -306,17 +225,6 @@ class ModelRecorder(TenkoObject):
         # Update state trace values
         for name in self.state_traces.keys():
             self.state_traces[name][self.n_rec] = State[name]
-
-    def progressbar(self, filled=False, color='purple'):
-        """
-        Once-per-update console output for a simulation progress bar.
-        """
-        State.progress = pct = (State.n + 1) / State.N_t
-        barpct = self.Nprogress / Config.progress_width
-        while barpct < pct:
-            self.out.box(filled=filled, color=color)
-            self.Nprogress += 1
-            barpct = self.Nprogress / Config.progress_width
 
     def save(self, *path, **root):
         """

@@ -29,6 +29,7 @@ class Network(TenkoObject):
     def __init__(self):
         super().__init__()
 
+        self.clocks = []
         self.neuron_groups = {}
         self.synapses = {}
         self.stimulators = {}
@@ -36,9 +37,14 @@ class Network(TenkoObject):
         self.buttons = {}
         self.watchers = {}
         self.counts = dict(neuron_groups=0, synapses=0, stimulators=0,
-                           state_updaters=0)
+                           state_updaters=0, clocks=0)
         self.G = nx.DiGraph()
         State.network = self
+        self.simclock = SimulationClock()
+        self.progressbar = ProgressBar()
+        self.show_progress = not State.show_debug and \
+                State.run_mode != RunMode.INTERACT
+        self.movie_recorder = None
         self.debug('network initialized')
 
     @staticmethod
@@ -205,20 +211,26 @@ class Network(TenkoObject):
         For animation mode, run enough timesteps for a video frame of the movie
         and return updated artists.
         """
-        State.movie_recorder.update()
-        while State.t < State.movie_recorder.t_frame:
+        frame = self.movie_recorder.frame.n
+        while self.movie_recorder.frame.n == frame:
             self.model_update()
             State.simplot.update_traces_data()
         self.display_update()
-        self.debug('frame = {State.movie_recorder.n_frame}, t = {State.t}')
+        self.debug('frame = {self.movie_recorder.n_frame}, t = {State.t}')
         return State.simplot.artists
 
     def model_update(self):
         """
-        Main once-per-loop update: the recorder, neuron groups, and synapses.
+        Main once-per-loop update: clocks, progress bar, recorder, state
+        updaters, input stimulators, neuron groups, and synapses.
         """
-        State.recorder.update()
-        if not State.recorder:
+        self.simclock.update()
+        if self.show_progress:
+            self.progress_bar.update()
+        for clock in self.clocks:
+            clock.update()
+        if not simclock:
+            self.display_summary()
             return
 
         for updater in self.state_updaters.values():
@@ -239,12 +251,43 @@ class Network(TenkoObject):
                 State.tablemaker is not None:
             State.tablemaker.update()
 
+    def display_summary(self):
+        """
+        Emit a simulation completion message with summary of time/frames.
+        """
+        self.out.hline()
+        msg = f'Simulation complete: n = {State.n - 1:g} timesteps'
+        if State.run_mode == RunMode.RECORD:
+            msg += f' / {State.recorder.N_t_rec:g} samples'
+        elif State.run_mode == RunMode.ANIMATE:
+            N_frames = self.movie_recorder.N_t_frame
+            msg += f' / {N_frames:g} video frames'
+        self.out(msg, anybar='green')
+        self.out.hline()
+
     def reset_neurons(self):
         """
         Reset neuron group parameters to parameter defaults.
         """
         for grp in self.neuron_groups.values():
             grp.reset()
+
+    def set_movie_recorder(self, recorder):
+        """
+        Set the MovieRecorder object to be used for this simulation.
+        """
+        if self.movie_recorder:
+            raise RuntimeError(f'recorder exists: {self.movie_recorder!r}')
+
+        self.movie_recorder = recorder
+
+    def add_clock(self, clock):
+        """
+        Add a clock to be updated in the simulation loop.
+        """
+        self.clocks.append(clock)
+        self.counts['clocks'] += 1
+        self.debug(f'added clock {clock!r}')
 
     def add_neuron_group(self, group):
         """
