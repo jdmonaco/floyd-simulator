@@ -158,7 +158,7 @@ class SimulationPlotter(TenkoObject):
         Set a NetworkGraph instance to be updated during the simulation.
         """
         if self.network_graph is not None:
-            raise RuntimeError('a network graph has already been registered')
+            self.out('Network graph already registered', warning=True)
         self.network_graph = netgraph
         self.network_graph_in_fig = netgraph.ax in self.axes_names
         self.out('Graph: {} (main figure = {})', netgraph,

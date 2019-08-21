@@ -62,6 +62,8 @@ def simulate(func=None, *, mode=None):
 
         # Call the user-defined model setup method and display the network
         self.setup_model()
+        if mode != RunMode.RECORD and hasattr(self, 'init_figure'):
+            State.simplot.init(self.init_figure)
         self.hline()
         State.network.display_neuron_groups()
         State.network.display_projections()
