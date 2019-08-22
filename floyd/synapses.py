@@ -149,7 +149,7 @@ class Synapses(Specified, BaseUnitGroup):
         for all synapses, i.e., (post.N, pre.N).
         """
         if hasattr(self, 'active_post'):
-            raise RuntimeError('already connected!')
+            self.out('Previous connection will be overwritten', warning=True)
         self.out('Connecting {}', self.name)
 
         self.set(C=0, S=0)
