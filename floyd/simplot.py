@@ -58,6 +58,8 @@ class SimulationPlotter(TenkoObject):
         self.axes_labels = {}
         self.traceplots = []
         self.timestamp = None
+        self.timestamp_loc = None
+        self.timestamp_ax = None
         self.initializer = None
         self.network_graph = None
         self.network_graph_in_fig = False
@@ -71,10 +73,17 @@ class SimulationPlotter(TenkoObject):
         return axname in self.axes
 
     @block_record_mode
-    def set_axes(self, **named_axes):
+    def set_axes(self, timestamp_ax=None, timestamp_loc=None, **named_axes):
         """
         Create named axes plots from subplot specs based on the `gs` gridspec.
         """
+        # Set timestamp axes (name) and position if specified
+        if timestamp_ax is not None:
+            self.timestamp_ax = timestamp_ax
+        if timestamp_loc is not None:
+            self.timestamp_loc = timestamp_loc
+
+        # Create all the specified subplot axes objects
         for name, spec in named_axes.items():
             if isinstance(spec, mpl.axes.Axes):
                 ax = spec
@@ -196,6 +205,7 @@ class SimulationPlotter(TenkoObject):
             Axes with right != 1 but which require a right border line
         """
         for ax in self.get_axes(*axes):
+            name = self._get_axes_name(ax)
             _, b, r, _ = ax.get_position().extents
             pkw = dict(c=color, lw=linewidth, transform=ax.transAxes)
             ax.plot([0,0], [0,1], **pkw)  # left
@@ -295,8 +305,8 @@ class SimulationPlotter(TenkoObject):
         """
         self.initializer = initializer
         if State.run_mode == RunMode.INTERACT:
-            self.init_timestamp()
             initializer()
+            self.init_timestamp()
             self.closefig()
 
     @block_record_mode
@@ -308,7 +318,7 @@ class SimulationPlotter(TenkoObject):
         if self.network_graph is not None:
             self.network_graph.closefig()
 
-    def get_all_artists(self, timestamp_axes=None, timestamp_loc='right'):
+    def get_all_artists(self):
         """
         Save the list of artists in batch mode to be returned from initializer.
         """
@@ -318,7 +328,7 @@ class SimulationPlotter(TenkoObject):
         if self.artists:
             return self.artists
 
-        self.init_timestamp(loc=timestamp_loc, ax=timestamp_axes)
+        self.init_timestamp()
 
         for plot, _ in self.plots:
             if type(plot) is list:
@@ -337,21 +347,20 @@ class SimulationPlotter(TenkoObject):
 
         return self.artists
 
-    def init_timestamp(self, loc=None, ax=None, **txt):
+    def init_timestamp(self, **txt):
         """
         Create the text object for the timestamp.
         """
         if self.timestamp is not None: return
 
-        # Get the position and alignment for the timestamp label
-        loc = 'right' if loc is None else loc
-        x, y, ha, va = self._loc_to_position(loc=loc)
+        firstax = next(iter(self.axes_names.keys()))
+        ax = firstax if self.timestamp_ax is None else \
+                self._get_axes_object(self.timestamp_ax)
+        loc = 'right' if self.timestamp_loc is None else self.timestamp_loc
 
         # Plot the timestamp text object
-        firstax = next(iter(self.axes_names.keys()))
-        ax = firstax if ax is None else self._get_axes_object(ax)
-        fmt = dict(color='gray', ha=ha, va=va, transform=ax.transAxes,
-                   fontweight='normal')
+        x, y, ha, va = self._loc_to_position(loc=loc)
+        fmt = dict(color='gray', ha=ha, va=va, transform=ax.transAxes)
         fmt.update(txt)
         self.timestamp = ax.text(x, y, '', **fmt)
 
