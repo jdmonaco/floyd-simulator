@@ -15,6 +15,7 @@ from .config   import *
 from .network  import *
 from .recorder import *
 from .context  import *
+from .clocks   import *
 from .neurons  import *
 from .synapses import *
 from .input    import *
