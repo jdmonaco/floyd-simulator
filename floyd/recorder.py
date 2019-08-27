@@ -27,19 +27,14 @@ class MovieRecorder(TenkoObject):
         """
         super().__init__()
 
-        # Compute the implicit frame interval from fps and compression
-        State.fps = Config.fps if fps is None else fps
+        self.fps = Config.fps if fps is None else fps
         compress = Config.compress if compress is None else compress
-        if compress == 'dt':
-            dt_frame = State.dt
+        if compress < 1:
+            raise ValueError(f'video compression <1: {compress!r}')
         else:
-            interval = 1e3 / State.fps  # ms / video frame
-            dt_frame = compress * interval  # ms of simulation per frame
-            if dt_frame < State.dt:
-                dt_frame = State.dt
-                self.out(f'Setting movie compression to '
-                         f'{dt_frame*State.fps/1e3}: implicit interval was '
-                         f'<dt ({State.dt!r})', warning=True)
+            dt_frame = compress * State.dt
+            time_rate_ms = self.fps * dt_frame
+            self.out('Movie simulation time-rate = {:g} ms/s', time_rate_ms)
 
         self.frame = ArrayClock(dt=dt_frame, duration=State.duration)
         State.network.set_movie_recorder(self)
