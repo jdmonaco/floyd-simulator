@@ -24,7 +24,7 @@ Config.name           = 'floyd'
 Config.figdpi         = Tenko.screendpi
 Config.moviedpi       = Tenko.screendpi
 Config.fps            = 59.94  # 29.97 for SD  # 24.976 for 'cinematic'
-Config.compress       = 'dt'  # 'dt' for 1:1 frames or video compression rate
+Config.compress       = 1.0  # simulation frames per video frame
 Config.progress_width = 80   # number of characters in the progress bar
 
 

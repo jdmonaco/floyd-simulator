@@ -289,7 +289,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # Save the animation as a movie file and play the movie!
         self.c['movie_file'] = self.filename(use_modname=True, use_runtag=True,
                 ext='mp4')
-        anim.save(self.path(self.c.movie_file), fps=State.fps, dpi=dpi)
+        savepath = self.path(self.c.movie_file)
+        anim.save(savepath, fps=movie_recorder.fps, dpi=dpi)
         State.network.display_summary()
         State.simplot.closefig()
 
