@@ -40,8 +40,8 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
     base_dtypes = {'spikes':'?'}
     base_variables = ('x', 'y', 'v', 'spikes', 't_spike', 'g_total',
                       'g_total_inh', 'g_total_exc', 'excitability',
-                      'I_app', 'I_net', 'I_leak', 'I_total_inh',
-                      'I_total_exc', 'I_proxy')
+                      'I_app', 'I_app_unit', 'I_net', 'I_leak', 'I_inh',
+                      'I_exc', 'I_proxy', 'I_total')
 
     def __init__(self, *, name, N=None, layout=None, g_log_range=(-5, 5),
         g_step=0.05, **kwargs):
@@ -185,7 +185,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         """
         Evolve the membrane voltage for neurons according to input currents.
         """
-        self.v += (State.dt / self.C_m) * (self.I_leak + self.I_net)
+        self.v += (State.dt / self.C_m) * self.I_total
 
     def update_spiking(self):
         """
@@ -232,13 +232,13 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         """
         Calculate total currents based on total conductances.
         """
-        self.I_leak      = self.g_L * (self.E_L - self.v)
-        self.I_total_exc = self.g_total_exc * (self.E_exc - self.v)
-        self.I_total_inh = self.g_total_inh * (self.E_inh - self.v)
-        self.I_proxy     = self.I_noise * self.eta
-        self.I_app       = self.I_DC_mean * self.excitability
-        self.I_net       = self.I_app + self.I_proxy + \
-                           self.I_total_exc + self.I_total_inh
+        self.I_leak  = self.g_L * (self.E_L - self.v)
+        self.I_exc   = self.g_total_exc * (self.E_exc - self.v)
+        self.I_inh   = self.g_total_inh * (self.E_inh - self.v)
+        self.I_proxy = self.I_noise * self.eta
+        self.I_app   = self.I_DC_mean + self.I_app_unit
+        self.I_net   = self.I_exc + self.I_inh + self.I_proxy + self.I_app
+        self.I_total = (self.I_leak + self.I_net) * self.excitability
 
     def update_noise(self):
         """
@@ -258,7 +258,7 @@ class COBANeuronGroup(Specified, BaseUnitGroup):
         Update metrics such as activity calculations.
         """
         self.LFP_uV = -(
-                self.I_total_exc.sum() + self.I_total_inh.sum()) / Config.g_LFP
+                self.I_exc.sum() + self.I_inh.sum()) / Config.g_LFP
         self.activity.update()
 
     def rates(self):

@@ -39,8 +39,7 @@ class AEIFNeuronGroup(COBANeuronGroup):
         """
         self.v += (State.dt / self.C_m) * (
                     self.g_L*self.delta*exp((self.v - self.V_t) / self.delta)
-                  + self.I_leak
-                  + self.I_net
+                  + self.I_total
         )
 
     def update_adaptation(self):
@@ -58,3 +57,4 @@ class AEIFNeuronGroup(COBANeuronGroup):
         """
         COBANeuronGroup.update_currents(self)
         self.I_net -= self.w
+        self.I_total -= self.w * self.excitability

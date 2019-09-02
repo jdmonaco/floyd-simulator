@@ -24,7 +24,8 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
     tau_noise = Param(default=10.0, units='ms', doc='time-constant of input current noise')
 
     base_variables = ('x', 'y', 'r', 'excitability', 'I_app', 'I_net',
-                      'I_leak', 'I_total_inh', 'I_total_exc', 'I_proxy')
+                      'I_leak', 'I_inh', 'I_exc', 'I_proxy', 'I_app_unit',
+                      'I_total')
 
     def __init__(self, *, name, N, g_log_range=(-5, 5), g_step=0.05, **kwargs):
         """
@@ -141,27 +142,26 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         """
         Evolve the neuronal firing rate variable according to input currents.
         """
-        self.r = self.F(self.r + (State.dt / self.tau_m) * (self.I_leak +
-                        self.I_net))
+        self.r = self.F(self.r + (State.dt / self.tau_m) * self.I_total)
         self.r[self.r<0] = 0.0
 
     def update_currents(self):
         """
         Update total input conductances for afferent synapses.
         """
-        self.I_total_exc = 0.0
-        self.I_total_inh = 0.0
+        self.I_exc = 0.0
+        self.I_inh = 0.0
 
         for gname in self.S_exc.keys():
-            self.I_total_exc += 10**self[gname] * self.S_exc[gname].I_total
+            self.I_exc += 10**self[gname] * self.S_exc[gname].I_total
         for gname in self.S_inh.keys():
-            self.I_total_inh -= 10**self[gname] * self.S_inh[gname].I_total
+            self.I_inh -= 10**self[gname] * self.S_inh[gname].I_total
 
         self.I_leak  = self.r_rest - self.r
         self.I_proxy = self.I_noise * self.eta
-        self.I_app   = self.I_DC_mean * self.excitability
-        self.I_net   = self.I_proxy + self.I_app + self.I_total_exc + \
-                           self.I_total_inh
+        self.I_app   = self.I_DC_mean + self.I_app_unit
+        self.I_net   = self.I_exc + self.I_inh + self.I_proxy + self.I_app
+        self.I_total = (self.I_leak + self.I_net) * self.excitability
 
     def update_noise(self):
         """

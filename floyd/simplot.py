@@ -49,6 +49,8 @@ class SimulationPlotter(TenkoObject):
         else:
             self.fig = plt.figure(num='simplot', clear=True,
                                   figsize=self.figsize, dpi=State.figdpi)
+            if 'context' in State:
+                State.context.figure('simplot', handle=self.fig)
             plt.ioff()
         self.gs = GridSpec(nrows, ncols, self.fig, 0, 0, 1, 1, 0, 0)
         self.axes = {}  # map names to axes objects

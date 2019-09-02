@@ -159,6 +159,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         Implicit method that prepares for an imminent simulation.
         """
+        self._initialized = False
+
         # Update from an alternative specfile if one was provided
         specfile = kwargs.pop('specfile', self._specfile_init)
         found_specfile = None
@@ -226,6 +228,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         self.network = Network()
         self.set_anybar_color('green')
         if debug_mode(): self.printf(State)
+        self._initialized = True
 
     def load_environment_parameters(self, env):
         """

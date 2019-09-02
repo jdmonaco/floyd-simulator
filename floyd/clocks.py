@@ -5,6 +5,8 @@ Classes for timing events against the simulation time.
 __all__ = ('SimulationClock', 'ProgressBar', 'timed', 'Clock', 'ArrayClock')
 
 
+import functools
+
 from numpy import r_, vstack
 from scipy.interpolate import interp1d
 
@@ -89,9 +91,9 @@ class ProgressBar(TenkoObject):
 
 def timed(func=None, *, dt=None, start=None):
     """
-    Decorator for functions to be called at regular intervals.
+    Decorator for functions to be clocked callbacks with regular intervals.
 
-    Function must accept an argument, will be the Clock instance.
+    Function must accept an argument, which will be the Clock instance.
     """
     if func is None:
         dt = State.dt if dt is None else dt

@@ -112,9 +112,11 @@ class Synapses(Specified, BaseUnitGroup):
             self.delay.set(pre_spikes)
             syn_spikes = self.delay.get()
 
-        # If release probability is defined, randomly choose successful spikes
-        if self.failures:
-            syn_spikes &= self.rnd.random_sample(self.N) < self.p_r_j
+        # If release probability is defined, randomly cause spikes to fail
+        if self.failures and any_(syn_spikes):
+            spk_ix = syn_spikes.nonzero()[0]
+            fail = self.rnd.random_sample(spk_ix.size) >= self.p_r_j[spk_ix]
+            syn_spikes[spk_ix[fail]] = False
 
         # Set spike times and update dts from most recent spike
         self.t_spike[self.i[syn_spikes], self.j[syn_spikes]] = State.t
@@ -129,11 +131,13 @@ class Synapses(Specified, BaseUnitGroup):
         ij_inactive = self.i[inactive], self.j[inactive]
         ij_active = self.i[active], self.j[active]
 
-        # Bi-exponential time-course of postsynaptic conductances
+        # Bi-exponential time-course of postsynaptic conductances, where pulses
+        # during active conductances begin from the current conductance level
         self.g[ij_inactive] = 0.0
-        g_t = self.g_peak[ij_active]*self.S[ij_active]*self.s*(
-                    exp(-delta/self.tau_d) - exp(-delta/self.tau_r))
-        self.g[ij_active] += g_t  # allow paired-pulse facilitation
+        g_peak = self.g_peak[ij_active]
+        self.g[ij_active] = self.S[ij_active]*self.s*(
+                g_peak * exp(-delta/self.tau_d) \
+             - (g_peak - self.g[ij_active]) * exp(-delta/self.tau_r))
 
         # Total conductances for connected postsynaptic neurons
         self.g_total[:] = self.g.sum(axis=1)
