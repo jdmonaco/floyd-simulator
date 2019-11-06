@@ -56,11 +56,9 @@ mvim)
     ;;
 
 install)
-    __conda_check
     pip install --no-deps -e "/Users/joe/code/toolbox" ;;
 
 uninstall)
-    __conda_check
     pip uninstall -y toolbox
     ;;
 
