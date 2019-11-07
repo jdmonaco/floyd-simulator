@@ -131,13 +131,23 @@ class Synapses(Specified, BaseUnitGroup):
         ij_inactive = self.i[inactive], self.j[inactive]
         ij_active = self.i[active], self.j[active]
 
+        #### ORIGINAL CONDUCTANCE CODE ####
         # Bi-exponential time-course of postsynaptic conductances, where pulses
         # during active conductances begin from the current conductance level
         self.g[ij_inactive] = 0.0
-        g_peak = self.g_peak[ij_active]
-        self.g[ij_active] = self.S[ij_active]*self.s*(
-                g_peak * exp(-delta/self.tau_d) \
-             - (g_peak - self.g[ij_active]) * exp(-delta/self.tau_r))
+        g_t = self.g_peak[ij_active]*self.S[ij_active]*self.s*(
+                    exp(-delta/self.tau_d) - exp(-delta/self.tau_r))
+        self.g[ij_active] += g_t  # allow paired-pulse facilitation
+        #### ORIGINAL CONDUCTANCE CODE ####
+
+        #### UPDATED CONDUCTANCE CODE ####
+        # Bi-exponential time-course of postsynaptic conductances
+        # self.g[ij_inactive] = 0.0
+        # g_peak = self.g_peak[ij_active]
+        # self.g[ij_active] = self.S[ij_active]*self.s*(
+                # g_peak * exp(-delta/self.tau_d) \
+             # - (g_peak - self.g[ij_active]) * exp(-delta/self.tau_r))
+        #### UPDATED CONDUCTANCE CODE ####
 
         # Total conductances for connected postsynaptic neurons
         self.g_total[:] = self.g.sum(axis=1)
