@@ -45,6 +45,8 @@ class RateSynapses(Synapses):
                 State.dt, dtype='f')
         self.out('max delay = {} timesteps', self.delay.delays.max())
 
+    # TODO: Update this for the new current-routing strategy of net vs. total
+
     def update(self):
         """
         Update synaptic timing based on the current presynaptic rates.
