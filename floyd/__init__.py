@@ -10,6 +10,7 @@ in memoriam.
 VERSION = "0.2.3"
 
 
+from .base     import *
 from .state    import *
 from .config   import *
 from .network  import *
@@ -17,9 +18,9 @@ from .recorder import *
 from .context  import *
 from .clocks   import *
 from .neurons  import *
-from .synapses import *
+# from .synapses import *
 from .input    import *
-from .delay    import *
+# from .delay    import *
 from .noise    import *
 from .simplot  import *
 from .graph    import *

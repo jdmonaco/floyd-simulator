@@ -16,30 +16,29 @@ class BaseUnitGroup(TenkoObject):
     base_dtypes = {}
     default_dtype = 'f'
 
-    def __init__(self, *, N, dtype=None, **kwargs):
+    def __init__(self, *, name, shape, dtype=None, **kwargs):
         """
         Create a group of model units with named variables.
 
-        Class-defined unit variables are made available as instance attributes.
+        Class-defined unit variables are made available as instance attributes
+        and initialized to zero-valued arrays.
 
         Arguments
         ---------
-        N : int | tuple of ints
-            The size of the group (or shape if multiple dimensions needed)
-
-        name : str
-            Unique name given to the group
+        shape : int | tuple of ints
+            The shape or size (1D) of the group
 
         dtype : dict | '?' | 'u' | 'i' | 'f' | 'd', optional (default 'f')
             Default numpy dtype to use for initializing array variables
         """
-        super().__init__(**kwargs)
+        super().__init__(name=name, **kwargs)
 
-        self.shape = N
-        if np.iterable(self.shape):
-            self.N = reduce(op.mul, self.shape)
+        if np.iterable(shape):
+            self.shape = tuple(shape)
+            self.size = reduce(op.mul, self.shape)
         else:
-            self.N = self.shape
+            self.size = int(shape)
+            self.shape = (self.size,)
 
         self._vardtypes = dict(self.base_dtypes)
         dflt_dtype = self.default_dtype
@@ -48,7 +47,8 @@ class BaseUnitGroup(TenkoObject):
         elif type(dtype) is str and dtype[0] in '?uifd':
             dflt_dtype = dtype
 
-        self._variables = list(set(self.base_variables + self.extra_variables))
+        allvars = set(self.base_variables + self.extra_variables)
+        self._variables = tuple(sorted(allvars))
         for varname in self._variables:
             thisdtype = self._vardtypes.get(varname, dflt_dtype)
             self.__dict__[varname] = zeros(self.shape, thisdtype)
@@ -60,13 +60,16 @@ class BaseUnitGroup(TenkoObject):
         for name, value in values.items():
             setattr(self, name, value)
 
-    def _evaluate(self, value):
-        if hasattr(value, 'sample'):
-            return value.sample(self.shape, state=self.rnd)
-        return value
-
     def __setattr__(self, name, value):
+        """
+        For named group variable, use in-place setting of array values.
+        """
         if hasattr(self, '_variables') and name in self._variables:
             getattr(self, name)[:] = self._evaluate(value)
             return
         super().__setattr__(name, value)
+
+    def _evaluate(self, value):
+        if hasattr(value, 'sample'):
+            return value.sample(self.shape, state=self.rnd)
+        return value

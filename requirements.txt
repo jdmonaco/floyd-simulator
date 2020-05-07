@@ -2,6 +2,7 @@
 python 
 jupyter 
 ipython 
+ipyparallel
 matplotlib 
 scipy 
 numpy 

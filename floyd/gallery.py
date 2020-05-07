@@ -7,7 +7,7 @@ __all__ = ('DonosoLIFInterneurons', 'DonosoLIFPyramids',
            'BretteAEIFPyramids')
 
 
-from . import LIFNeuronGroup, AEIFNeuronGroup
+from .coba import LIFNeuronGroup, AdaptExpNeuronGroup
 
 
 class DonosoLIFInterneurons(LIFNeuronGroup):

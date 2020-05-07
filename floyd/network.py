@@ -303,7 +303,7 @@ class Network(TenkoObject):
         self.debug(f'added neuron group {group.name!r}')
         if debug_mode(): printf(f'{group!s}')
 
-    def add_synapses(self, synapses):
+    def add_projection(self, synapses):
         """
         Add an instance of Synapses to the network.
         """
@@ -311,7 +311,7 @@ class Network(TenkoObject):
             self.out(synapses.name, prefix='AlreadyDeclared', warning=True)
             return
         self.synapses[synapses.name] = synapses
-        synapses.post.add_synapses(synapses)
+        synapses.post.add_projection(synapses)
         self.G.add_edge(synapses.pre.name, synapses.post.name, object=synapses)
         self.counts['synapses'] += 1
         self.debug(f'added synapses {synapses!r}')
@@ -372,7 +372,7 @@ class Network(TenkoObject):
                 post = self.neuron_groups[post]
             synapses = synclass(pre, post, **specs)
             if synapses.name not in self.synapses:
-                self.add_synapses(synapses)
+                self.add_projection(synapses)
                 self.debug(f'synapses {name!r} did not add itself to network')
             self.out.printf(synapses)
             self.out.hline()
@@ -440,7 +440,7 @@ class Network(TenkoObject):
         """
         for synapses in self.synapses.values():
             self.out.printf(synapses)
-            synapses.display_connectivity()
+            synapses.print_stats()
             self.out.hline()
 
     def display_object_counts(self):

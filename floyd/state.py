@@ -11,16 +11,20 @@ from roto.dicts import AttrDict
 
 
 class RunMode(enum.Enum):
+
     ANIMATE  = 'create_movie'
     INTERACT = 'launch_dashboard'
     RECORD   = 'collect_data'
 
 
-
 class SharedState(AttrDict):
+
     def reset(self):
         for key in self.keys():
             self[key] = None
+
+    def is_defined(key):
+        return key in self and self[key] is not None
 
 
 State = SharedState()

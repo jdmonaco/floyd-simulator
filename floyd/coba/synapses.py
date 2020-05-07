@@ -17,13 +17,13 @@ from .state import State
 
 class Synapses(Specified, BaseUnitGroup):
 
-    transmitter = Param(default='glutamate', doc="'GABA' | 'glutamate'")
-    g_max       = Param(default=1.0, units="nS")
-    tau_r       = Param(default=0.5, units="ms")
-    tau_d       = Param(default=2.0, units="ms")
-    tau_l       = Param(default=1.0, units="ms")
-    tau_max     = Param(default=25.0, units="ms")
-    failures    = Param(default=False, doc="enable synaptic failures")
+    transmitter = Param('glutamate', doc="'GABA' | 'glutamate'")
+    g_max       = Param(1.0, units="nS")
+    tau_r       = Param(0.5, units="ms")
+    tau_d       = Param(2.0, units="ms")
+    tau_l       = Param(1.0, units="ms")
+    tau_max     = Param(25.0, units="ms")
+    failures    = Param(False, doc="enable synaptic failures")
 
     base_variables = ('C', 'S', 't_spike', 'dt_spike', 'g', 'g_peak', 'p_r')
 
@@ -49,7 +49,7 @@ class Synapses(Specified, BaseUnitGroup):
                 self.postsynaptic_potential().mean(), prefix='PostPotential')
 
         if 'network' in State:
-            State.network.add_synapses(self)
+            State.network.add_projection(self)
         self._initialized = True
 
     def scale_constant(self):

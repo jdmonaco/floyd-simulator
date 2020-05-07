@@ -1,55 +1,61 @@
 """
-Base class for current-based rate-coding neuron groups.
+Base class for unit groups of model neurons.
 """
+
+__all__ = ('BaseNeuronGroup',)
+
 
 import copy
 from functools import partial
 
 from toolbox.numpy import *
-from specify import Param, Slider, LogSlider, Specified, is_param
+from specify import Specified, Param, LogSlider, is_param
 from specify.utils import get_all_slots
 
-from ..noise import OUNoiseProcess
-from ..groups import BaseUnitGroup
 from ..state import State, RunMode
+from ..noise import OUNoiseProcess
+
+from .groups import BaseUnitGroup
 
 
-class RateNeuronGroup(Specified, BaseUnitGroup):
+class BaseNeuronGroup(Specified, BaseUnitGroup):
 
-    tau_m     = Slider(default=10.0, start=1.0, end=100.0, step=0.1, units='ms', doc='')
-    r_rest    = Slider(default=0.0, start=1.0, end=100.0, step=0.1, units='sp/s', doc='')
-    r_max     = Slider(default=100.0, start=1.0, end=500.0, step=1.0, units='sp/s', doc='')
-    I_DC_mean = Slider(default=0, start=-1e3, end=1e3, step=1e1, units='pA', doc='')
-    I_noise   = Slider(default=0, start=-1e3, end=1e3, step=1e1, units='pA', doc='')
-    tau_noise = Param(default=10.0, units='ms', doc='time-constant of input current noise')
+    """
+    Common functionality for model neuron groups.
+    """
 
-    base_variables = ('x', 'y', 'r', 'excitability', 'I_app', 'I_net',
-                      'I_leak', 'I_inh', 'I_exc', 'I_proxy', 'I_app_unit',
-                      'I_total')
+    stochastic = Param(False, doc='use random-process inputs')
 
-    def __init__(self, *, name, N, g_log_range=(-5, 5), g_step=0.05, **kwargs):
+    base_variables = ('x', 'y', 'output', 'I_app', 'I_app_unit', 'I_net', 
+                      'I_leak', 'I_inh', 'I_exc', 'I_proxy', 'I_total')
+
+    def __init__(self, *, name, shape, g_log_range=(-5, 5), g_step=0.05, 
+        **kwargs):
         """
-        Construct rate-based neuron groups.
+        Initialize data structures, noise, sources, and context gain parameters
+        for this model neuron group.
         """
-        self._initialized = False
-        self.N = N
-        super().__init__(name=name, N=N, **kwargs)
+        self._initialized = False 
+        super().__init__(name=name, shape=shape, **kwargs)
 
-        # Set up the intrinsic noise inputs (current-based only for rate-based
-        # neurons. In interactive run mode, generators are used to provide
-        # continuous noise.
-        self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise,
-                seed=self.name+'_ratenoise')
-        if State.run_mode == RunMode.INTERACT:
-            self.eta_gen = self.oup.generator()
-            self.eta = next(self.eta_gen)
+        if self.stochastic:
+            # Set up the intrinsic noise inputs (current-based only for
+            # rate-based neurons). In interactive run mode, generators are used
+            # to provide continuous noise.
+
+            self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise,
+                    seed=self.name+'_ratenoise')
+            if State.run_mode == RunMode.INTERACT:
+                self.eta_gen = self.oup.generator()
+                self.eta = next(self.eta_gen)
+            else:
+                self.oup.compute()
+                self.eta = self.oup.eta[...,0]
         else:
-            self.oup.compute()
-            self.eta = self.oup.eta[...,0]
+            self.oup = None
+            self.eta = zeros(self.N)
 
-        # Initialize data structures
-        self.S_inh = {}
-        self.S_exc = {}
+        # Mapping to store afferent projections
         self.synapses = {}
 
         # Add any conductance gain values in the shared context as Params
@@ -60,21 +66,10 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
             if k.startswith(f'g_{name}_'):
                 self._add_gain_spec(k, v)
 
-        # Initialize metrics and variables
-        self.r = self.r_rest
-        self.set_pulse_metrics() # uses default pulse curves
-        self.excitability = 1.0
-
-        # Create the activation nonlinearity
-        self.F = lambda r: self.r_max * (1 + tanh(r/self.r_max)) / 2
-
-        # Dummy values for reversals (expected by Synapses)
-        self.E_L = -60.0
-        self.C_m = 200.0
-        self.E_syn = dict(GABA=-75.0, AMPA=0.0, NMDA=0.0, glutamate=0.0)
-
-        if 'network' in State:
+        if State.is_defined('network'):
             State.network.add_neuron_group(self)
+        
+        self._initialized = True
 
     def _add_gain_spec(self, gname, value):
         """
@@ -101,7 +96,7 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         self.gain_keys.append(gname)
         self.debug(f'added gain {gname!r} with value {new_param.default!r}')
 
-    def add_synapses(self, synapses):
+    def add_projection(self, synapses):
         """
         Add afferent synaptic pathway to this neuron group.
         """
@@ -110,16 +105,12 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
                     error=True)
             return
 
-        # Add synapses to list of inhibitory or excitatory afferents
+        # Add synapses to mapping of afferent inputs
         gname = 'g_{}_{}'.format(synapses.post.name, synapses.pre.name)
-        if synapses.transmitter == 'GABA':
-            self.S_inh[gname] = synapses
-        else:
-            self.S_exc[gname] = synapses
         self.synapses[gname] = synapses
 
-        # Check whether the conductance gain spec has already been found in the
-        # shared context. If not, then add a new Param to the spec with a
+        # Check whether the gain spec has already been found in the
+        # context. If not, then add a new Param to the spec with a
         # default value of 0.0 (log10(1)).
         #
         # Gain spec names take the form `g_<post.name>_<pre.name>`.
@@ -134,6 +125,7 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         """
         Update the model neurons.
         """
+
         self.update_rates()
         self.update_currents()
         self.update_noise()
@@ -142,7 +134,7 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         """
         Evolve the neuronal firing rate variable according to input currents.
         """
-        self.r = self.F(self.r + (State.dt / self.tau_m) * self.I_total)
+        self.r += State.dt * self.I_total
         self.r[self.r<0] = 0.0
 
     def update_currents(self):
@@ -167,6 +159,7 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
         """
         Update the intrinsic noise sources (for those with nonzero gains).
         """
+        if self.oup is None: return
         if State.run_mode == RunMode.INTERACT:
             if self.I_noise: self.eta = next(self.eta_gen)
         else:
@@ -186,13 +179,13 @@ class RateNeuronGroup(Specified, BaseUnitGroup):
 
     def active_mean_rate(self):
         """
-        Return the mean firing rate in the calculation window.
+        Return the mean firing rate of active neurons in the calculation window.
         """
         return self.r[self.r>0].mean()
 
     def active_fraction(self):
         """
-        Return the active fraction in the calculation window.
+        Return the active fraction of neurons in the calculation window.
         """
         return (self.r > 0).sum() / self.N
 

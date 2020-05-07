@@ -1,5 +1,5 @@
 """
-Base class for conductance-based model neuron groups.
+A conductance-based leaky integrate-and-fire neuron group.
 """
 
 import copy
@@ -17,7 +17,7 @@ from ..config import Config
 from ..state import State, RunMode
 
 
-class COBANeuronGroup(Specified, BaseUnitGroup):
+class LIFNeuronGroup(Specified, BaseUnitGroup):
 
     C_m           = Slider(default=200, start=50, end=500, step=5, units='pF', doc='membrane capacitance')
     g_L           = Param(default=30.0, units='nS', doc='leak conductance')
