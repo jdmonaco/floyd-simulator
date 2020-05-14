@@ -6,23 +6,17 @@ __all__ = ('BaseNeuronGroup',)
 
 
 import copy
-from functools import partial
 
 from toolbox.numpy import *
-from specify import Specified, Param, LogSlider, is_param
+from specify import LogSlider, is_param
 from specify.utils import get_all_slots
 
 from ..state import State
 
-from .groups import BaseUnitGroup
+from .input import InputGroup
 
 
-class BaseNeuronGroup(Specified, BaseUnitGroup):
-
-    k_frac = Param(0.2, doc='pulse metric smoothness')
-    do_metrics = Param(False, doc='whether to auto-compute basic metrics')
-    
-    base_variables = ('x', 'y', 'output')
+class BaseNeuronGroup(InputGroup):
 
     def __init__(self, *, name, shape, g_log_range=(-5, 5), g_step=0.05, 
         **kwargs):
@@ -40,20 +34,6 @@ class BaseNeuronGroup(Specified, BaseUnitGroup):
         for k, v in vars(State.context.__class__).items():
             if k.startswith(f'g_{name}_'):
                 self._add_gain_spec(k, v)
-
-        # Initialize pulse metrics with default parameters
-        self._min_output = inf
-        self._mean_output = 0.0
-        self._max_output = -inf
-        self._min_active = inf
-        self._mean_active = 0.0
-        self._max_active = -inf
-        self._pulse_active = 0.0
-        self._pulse_output = 0.0
-        self._pulse = 0.0
-        self._k_frac = 0.2
-        self._compute_pulse = lambda l, u, k, x: \
-            (1 + 1/(1 + exp(-k * (x - u))) - 1/(1 + exp(k * (x - l)))) / 2
 
         if State.is_defined('network'):
             State.network.add_neuron_group(self)
@@ -119,40 +99,9 @@ class BaseNeuronGroup(Specified, BaseUnitGroup):
         Update the model neurons. 
         
         Subclasses should overload this to update the values in the unit 
-        variable `output`. Overloaded methods can call super().update() 
-        to calculate metrics.
+        variable `output` and to call super().update() for pulse metrics.
         """
-        if self.do_metrics:
-            self.update_metrics()
-
-    def update_metrics(self):
-        """
-        Calculate model-agnostic metrics on the unit output.
-        """
-        # Compute mean/min/max of unit output values
-        self._mean_output = self.output.mean()
-        self._min_output = min(self._min_output, self._mean_output)
-        self._max_output = max(self._max_output, self._mean_output)
-
-        # Compute mean/min/max of unit activity (nonzero output) fraction
-        self._mean_active = (self.output > 0).mean()
-        self._min_active = min(self._min_active, self._mean_active)
-        self._max_active = max(self._max_active, self._mean_active)
-
-        # Calculate smoothness coefficients based on current range
-        k_output = self.k_frac * (self._max_output - self._min_output)
-        k_active = self.k_frac * (self._max_active - self._min_active)
-
-        # Compute range-adaptive sigmoidal nonlinearities as pulse metrics
-        self._pulse_output = self._compute_pulse(
-            self._min_output, self._max_output, k_output, self._mean_output)
-        self._pulse_active = self._compute_pulse(
-            self._min_active, self._max_active, k_active, self._mean_active)
-
-        # As in kurtosis calculations, use the 4th power to emphasize the 
-        # extremities, then the mean tells you at least one or the other is
-        # currently at extreme values.
-        self._pulse = (self._pulse_active**4 + self._pulse_output**4) / 2
+        super().update()
 
     def get_neuron_sliders(self):
         """

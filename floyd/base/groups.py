@@ -14,7 +14,7 @@ class BaseUnitGroup(TenkoObject):
     base_variables = ()
     extra_variables = ()
     base_dtypes = {}
-    default_dtype = 'f'
+    default_dtype = 'd'
 
     def __init__(self, *, name, shape, dtype=None, **kwargs):
         """

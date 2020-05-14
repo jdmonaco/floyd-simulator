@@ -32,13 +32,14 @@ class Network(TenkoObject):
 
         self.clocks = []
         self.neuron_groups = {}
+        self.input_groups = {}
         self.synapses = {}
         self.stimulators = {}
         self.state_updaters = {}
         self.buttons = {}
         self.watchers = {}
-        self.counts = dict(neuron_groups=0, synapses=0, stimulators=0,
-                           state_updaters=0, clocks=0)
+        self.counts = dict(neuron_groups=0, input_groups=0, synapses=0, 
+                           stimulators=0, state_updaters=0, clocks=0)
         self.G = nx.DiGraph()
         State.network = self
         self.simclock = SimulationClock()
@@ -238,10 +239,12 @@ class Network(TenkoObject):
             updater.update()
         for stimulator in self.stimulators.values():
             stimulator.update()
+        for inpgrp in self.input_groups.values():
+            inpgrp.update()
         for synapses in self.synapses.values():
             synapses.update()
-        for group in self.neuron_groups.values():
-            group.update()
+        for nrngrp in self.neuron_groups.values():
+            nrngrp.update()
 
     def display_update(self):
         """
@@ -301,6 +304,19 @@ class Network(TenkoObject):
         self.G.add_node(group.name, object=group)
         self.counts['neuron_groups'] += 1
         self.debug(f'added neuron group {group.name!r}')
+        if debug_mode(): printf(f'{group!s}')
+
+    def add_input_group(self, group):
+        """
+        Add an instance of InputGroup to the network.
+        """
+        if group.name in self.input_groups:
+            self.out(group.name, prefix='AlreadyDeclared', warning=True)
+            return
+        self.input_groups[group.name] = group
+        self.G.add_node(group.name, object=group)
+        self.counts['input_groups'] += 1
+        self.debug(f'added input group {group.name!r}')
         if debug_mode(): printf(f'{group!s}')
 
     def add_projection(self, synapses):
@@ -425,6 +441,14 @@ class Network(TenkoObject):
                     continue
             if condn and condn(syn):
                 yield syn
+
+    def display_input_groups(self):
+        """
+        Print out detailed parameters for input groups.
+        """
+        for group in self.input_groups.values():
+            self.out.printf(group)
+            self.out.hline()
 
     def display_neuron_groups(self):
         """
