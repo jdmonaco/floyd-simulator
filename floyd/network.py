@@ -238,10 +238,10 @@ class Network(TenkoObject):
             updater.update()
         for stimulator in self.stimulators.values():
             stimulator.update()
-        for group in self.neuron_groups.values():
-            group.update()
         for synapses in self.synapses.values():
             synapses.update()
+        for group in self.neuron_groups.values():
+            group.update()
 
     def display_update(self):
         """
@@ -311,7 +311,7 @@ class Network(TenkoObject):
             self.out(synapses.name, prefix='AlreadyDeclared', warning=True)
             return
         self.synapses[synapses.name] = synapses
-        synapses.post.add_projection(synapses)
+        synapses.post.add_afferent_projection(synapses)
         self.G.add_edge(synapses.pre.name, synapses.post.name, object=synapses)
         self.counts['synapses'] += 1
         self.debug(f'added synapses {synapses!r}')

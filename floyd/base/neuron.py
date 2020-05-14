@@ -12,59 +12,48 @@ from toolbox.numpy import *
 from specify import Specified, Param, LogSlider, is_param
 from specify.utils import get_all_slots
 
-from ..state import State, RunMode
-from ..noise import OUNoiseProcess
+from ..state import State
 
 from .groups import BaseUnitGroup
 
 
 class BaseNeuronGroup(Specified, BaseUnitGroup):
 
-    """
-    Common functionality for model neuron groups.
-    """
-
-    stochastic = Param(False, doc='use random-process inputs')
-
-    base_variables = ('x', 'y', 'output', 'I_app', 'I_app_unit', 'I_net', 
-                      'I_leak', 'I_inh', 'I_exc', 'I_proxy', 'I_total')
+    k_frac = Param(0.2, doc='pulse metric smoothness')
+    do_metrics = Param(False, doc='whether to auto-compute basic metrics')
+    
+    base_variables = ('x', 'y', 'output')
 
     def __init__(self, *, name, shape, g_log_range=(-5, 5), g_step=0.05, 
         **kwargs):
         """
-        Initialize data structures, noise, sources, and context gain parameters
-        for this model neuron group.
+        Initialize data structures and context-specified gain parameters.
         """
         self._initialized = False 
         super().__init__(name=name, shape=shape, **kwargs)
 
-        if self.stochastic:
-            # Set up the intrinsic noise inputs (current-based only for
-            # rate-based neurons). In interactive run mode, generators are used
-            # to provide continuous noise.
-
-            self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise,
-                    seed=self.name+'_ratenoise')
-            if State.run_mode == RunMode.INTERACT:
-                self.eta_gen = self.oup.generator()
-                self.eta = next(self.eta_gen)
-            else:
-                self.oup.compute()
-                self.eta = self.oup.eta[...,0]
-        else:
-            self.oup = None
-            self.eta = zeros(self.N)
-
-        # Mapping to store afferent projections
-        self.synapses = {}
-
         # Add any conductance gain values in the shared context as Params
+        self.afferents = {}
         self.gain_keys = []
         self.gain_param_base = LogSlider(default=0.0, start=g_log_range[0],
                 end=g_log_range[1], step=g_step, units='nS')
         for k, v in vars(State.context.__class__).items():
             if k.startswith(f'g_{name}_'):
                 self._add_gain_spec(k, v)
+
+        # Initialize pulse metrics with default parameters
+        self._min_output = inf
+        self._mean_output = 0.0
+        self._max_output = -inf
+        self._min_active = inf
+        self._mean_active = 0.0
+        self._max_active = -inf
+        self._pulse_active = 0.0
+        self._pulse_output = 0.0
+        self._pulse = 0.0
+        self._k_frac = 0.2
+        self._compute_pulse = lambda l, u, k, x: \
+            (1 + 1/(1 + exp(-k * (x - u))) - 1/(1 + exp(k * (x - l)))) / 2
 
         if State.is_defined('network'):
             State.network.add_neuron_group(self)
@@ -96,126 +85,74 @@ class BaseNeuronGroup(Specified, BaseUnitGroup):
         self.gain_keys.append(gname)
         self.debug(f'added gain {gname!r} with value {new_param.default!r}')
 
-    def add_projection(self, synapses):
+    def add_afferent_projection(self, projection):
         """
-        Add afferent synaptic pathway to this neuron group.
+        Add afferent (input) projection to this neuron group.
         """
-        if synapses.post is not self:
-            self.out('{} does not project to {}', synapses.name, self.name,
+        if projection.post is not self:
+            self.out('{} does not project to {}', projection.name, self.name,
+                    error=True)
+            return
+        
+        if projection in self.afferents.values():
+            self.out('{} already added to {}', projection.name, self.name,
                     error=True)
             return
 
-        # Add synapses to mapping of afferent inputs
-        gname = 'g_{}_{}'.format(synapses.post.name, synapses.pre.name)
-        self.synapses[gname] = synapses
+        # Add projection to this group's afferent inputs
+        #
+        # Note: gain spec names take the form `g_<post.name>_<pre.name>`.
+        gname = 'g_{}_{}'.format(projection.post.name, projection.pre.name)
+        self.afferents[gname] = projection
 
         # Check whether the gain spec has already been found in the
         # context. If not, then add a new Param to the spec with a
         # default value of 0.0 (log10(1)).
-        #
-        # Gain spec names take the form `g_<post.name>_<pre.name>`.
-
         if gname in self.gain_keys:
-            self.debug(f'gain spec {gname!r} exists for {synapses.name!r}')
+            self.debug(f'gain spec {gname!r} exists for {projection.name!r}')
         else:
             self._add_gain_spec(gname, 0.0)
-            self.debug(f'added gain spec {gname!r} for {synapses.name!r}')
+            self.debug(f'added gain spec {gname!r} for {projection.name!r}')
 
     def update(self):
         """
-        Update the model neurons.
+        Update the model neurons. 
+        
+        Subclasses should overload this to update the values in the unit 
+        variable `output`. Overloaded methods can call super().update() 
+        to calculate metrics.
         """
+        if self.do_metrics:
+            self.update_metrics()
 
-        self.update_rates()
-        self.update_currents()
-        self.update_noise()
+    def update_metrics(self):
+        """
+        Calculate model-agnostic metrics on the unit output.
+        """
+        # Compute mean/min/max of unit output values
+        self._mean_output = self.output.mean()
+        self._min_output = min(self._min_output, self._mean_output)
+        self._max_output = max(self._max_output, self._mean_output)
 
-    def update_rates(self):
-        """
-        Evolve the neuronal firing rate variable according to input currents.
-        """
-        self.r += State.dt * self.I_total
-        self.r[self.r<0] = 0.0
+        # Compute mean/min/max of unit activity (nonzero output) fraction
+        self._mean_active = (self.output > 0).mean()
+        self._min_active = min(self._min_active, self._mean_active)
+        self._max_active = max(self._max_active, self._mean_active)
 
-    def update_currents(self):
-        """
-        Update total input conductances for afferent synapses.
-        """
-        self.I_exc = 0.0
-        self.I_inh = 0.0
+        # Calculate smoothness coefficients based on current range
+        k_output = self.k_frac * (self._max_output - self._min_output)
+        k_active = self.k_frac * (self._max_active - self._min_active)
 
-        for gname in self.S_exc.keys():
-            self.I_exc += 10**self[gname] * self.S_exc[gname].I_total
-        for gname in self.S_inh.keys():
-            self.I_inh -= 10**self[gname] * self.S_inh[gname].I_total
+        # Compute range-adaptive sigmoidal nonlinearities as pulse metrics
+        self._pulse_output = self._compute_pulse(
+            self._min_output, self._max_output, k_output, self._mean_output)
+        self._pulse_active = self._compute_pulse(
+            self._min_active, self._max_active, k_active, self._mean_active)
 
-        self.I_leak  = self.r_rest - self.r
-        self.I_proxy = self.I_noise * self.eta
-        self.I_app   = self.I_DC_mean + self.I_app_unit
-        self.I_net   = self.I_exc + self.I_inh + self.I_proxy + self.I_app
-        self.I_total = (self.I_leak + self.I_net) * self.excitability
-
-    def update_noise(self):
-        """
-        Update the intrinsic noise sources (for those with nonzero gains).
-        """
-        if self.oup is None: return
-        if State.run_mode == RunMode.INTERACT:
-            if self.I_noise: self.eta = next(self.eta_gen)
-        else:
-            if self.I_noise: self.eta = self.oup.eta[...,State.n]
-
-    def rates(self):
-        """
-        Return the firing rates in the calculation window.
-        """
-        return self.r[:]
-
-    def mean_rate(self):
-        """
-        Return the mean firing rate in the calculation window.
-        """
-        return self.r.mean()
-
-    def active_mean_rate(self):
-        """
-        Return the mean firing rate of active neurons in the calculation window.
-        """
-        return self.r[self.r>0].mean()
-
-    def active_fraction(self):
-        """
-        Return the active fraction of neurons in the calculation window.
-        """
-        return (self.r > 0).sum() / self.N
-
-    def set_pulse_metrics(self, active=(10, 90, 10), rate=(1, 100, 20),
-        only_active=True):
-        """
-        Set (min, max, smoothness) for active fraction and mean rate.
-        """
-        pulse = lambda l, u, k, x: \
-            (1 + 1/(1 + exp(-k * (x - u))) - 1/(1 + exp(k * (x - l)))) / 2
-
-        self.active_pulse = partial(pulse, *active)
-        self.rate_pulse = partial(pulse, *rate)
-        self.pulse_only_active = only_active
-
-    def pulse(self):
-        """
-        Return a [0,1] "pulse" metric of the healthiness of activity.
-        """
-        apulse = self.active_pulse(self.active_fraction())
-        if self.pulse_only_active:
-            rpulse = self.rate_pulse(self.active_mean_rate())
-        else:
-            rpulse = self.rate_pulse(self.mean_rate())
-
-        # As in kurtosis calculations, use the 4th power to emphasize
-        # the extremities, then the mean tells you at least one or the other is
-        # currently at extremes.
-
-        return (apulse**4 + rpulse**4) / 2
+        # As in kurtosis calculations, use the 4th power to emphasize the 
+        # extremities, then the mean tells you at least one or the other is
+        # currently at extreme values.
+        self._pulse = (self._pulse_active**4 + self._pulse_output**4) / 2
 
     def get_neuron_sliders(self):
         """
