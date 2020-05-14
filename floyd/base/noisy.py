@@ -45,16 +45,20 @@ class NoisyNeuronGroup(BaseNeuronGroup):
     def update(self):
         """
         Update the model neurons.
+
+        Subclasses should update the neuron `output` values and may use the
+        stochastic noise sources in the `eta` unit-variable. Subclasses should
+        also call super().update() to calculate metrics and automatically 
+        update the noise sources.
         """
-        self.update_noise()
         super().update()
+        if self.stochastic:
+            self.update_noise()
 
     def update_noise(self):
         """
         Update the intrinsic noise sources (for those with nonzero gains).
         """
-        if not self.stochastic: return
-
         if State.run_mode == RunMode.INTERACT:
             self.eta = next(self.eta_gen)
         else:

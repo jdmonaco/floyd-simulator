@@ -5,12 +5,12 @@ A conductance-based adaptive-exponential (AdEx) threshold neuron group.
 from toolbox.numpy import *
 from specify import Slider
 
-from .leaky import LIFNeuronGroup
+from .leaky import LeakyNeuronGroup
 
 from ..state import State
 
 
-class AdaptExpNeuronGroup(LIFNeuronGroup):
+class AdaptExpNeuronGroup(LeakyNeuronGroup):
 
     """
     A general conductance-based adaptive exponential integrate-fire neuron.

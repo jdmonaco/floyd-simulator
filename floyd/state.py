@@ -23,7 +23,7 @@ class SharedState(AttrDict):
         for key in self.keys():
             self[key] = None
 
-    def is_defined(key):
+    def is_defined(self, key):
         return key in self and self[key] is not None
 
 

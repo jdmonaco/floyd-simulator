@@ -7,10 +7,10 @@ __all__ = ('DonosoLIFInterneurons', 'DonosoLIFPyramids',
            'BretteAEIFPyramids')
 
 
-from .coba import LIFNeuronGroup, AdaptExpNeuronGroup
+from .coba import LeakyNeuronGroup, AdaptExpNeuronGroup
 
 
-class DonosoLIFInterneurons(LIFNeuronGroup):
+class DonosoLIFInterneurons(LeakyNeuronGroup):
 
     """
     Donoso et al. (2018): Ripples in interneuron networks.
@@ -26,7 +26,7 @@ class DonosoLIFInterneurons(LIFNeuronGroup):
     tau_ref = 1.0
 
 
-class DonosoLIFPyramids(LIFNeuronGroup):
+class DonosoLIFPyramids(LeakyNeuronGroup):
 
     """
     Donoso et al. (2018): Ripples in interneuron networks.
@@ -42,7 +42,7 @@ class DonosoLIFPyramids(LIFNeuronGroup):
     tau_ref = 2.0
 
 
-class MalerbaAEIFInterneurons(AEIFNeuronGroup):
+class MalerbaAEIFInterneurons(AdaptExpNeuronGroup):
 
     """
     Malerba et al. (2016): Ripples as inhibitory transients.
@@ -62,7 +62,7 @@ class MalerbaAEIFInterneurons(AEIFNeuronGroup):
     tau_w = 30.0
 
 
-class MalerbaAEIFPyramids(AEIFNeuronGroup):
+class MalerbaAEIFPyramids(AdaptExpNeuronGroup):
 
     """
     Malerba et al. (2016): Ripples as inhibitory transients.
@@ -82,7 +82,7 @@ class MalerbaAEIFPyramids(AEIFNeuronGroup):
     tau_w = 120.0
 
 
-class BretteAEIFPyramids(AEIFNeuronGroup):
+class BretteAEIFPyramids(AdaptExpNeuronGroup):
 
     """
     Brette & Gerstner (2005): The adaptive-exponential integrate-fire neuron.

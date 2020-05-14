@@ -2,7 +2,8 @@
 Kernel functions.
 """
 
-__all__ = ('KernelFunc', 'GaussianKernel', 'GaussianDistanceKernel')
+__all__ = ('KernelFunc', 'GaussianKernel', 'PointDistanceKernel', 
+           'RelativeDistanceKernel')
 
 
 from toolbox.numpy import *

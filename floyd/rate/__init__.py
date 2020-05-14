@@ -2,5 +2,5 @@
 Classes for rate-coding neurons and synapses.
 """
 
-from .rate import RateCodeNeuronGroup
-from .rate_synapses import RateSynapses
+from .cuba import RateCodeNeuronGroup
+from .synapses import RateSynapses

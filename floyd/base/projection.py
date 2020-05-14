@@ -12,7 +12,6 @@ from toolbox.numpy import *
 from specify import Specified, Param
 from roto.dicts import pprint as dict_pprint
 
-from ..matrix import pairwise_distances as distances
 from ..state import State
 
 from .groups import BaseUnitGroup

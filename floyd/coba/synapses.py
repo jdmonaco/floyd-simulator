@@ -9,13 +9,12 @@ from toolbox.numpy import *
 from specify import Specified, Param
 from roto.dicts import midlite, pprint as dict_pprint
 
-from .matrix import pairwise_distances as distances
-from .groups import BaseUnitGroup
-from .delay import DelayLines
-from .state import State
+from ..matrix import pairwise_distances as distances
+from ..base import BaseProjection
+from ..state import State
 
 
-class Synapses(Specified, BaseUnitGroup):
+class Synapses(BaseProjection):
 
     transmitter = Param('glutamate', doc="'GABA' | 'glutamate'")
     g_max       = Param(1.0, units="nS")
@@ -92,13 +91,12 @@ class Synapses(Specified, BaseUnitGroup):
         )
         self.out.printf(dict_pprint(stats, name=f'Connectivity({self.name})'))
 
-    def set_delays(self, cond_velocity=0.5):
+    def set_conduction_delays(self, cond_velocity=0.5):
         """
         Construct spike-transmission conduction delay lines.
         """
-        if not hasattr(self, 'active_post'):
-            raise RuntimeError('synapses must be connected first!')
         timing = self.distances / cond_velocity
+        self.set_delays(timing, timingbased=True)
         self.delay = DelayLines.from_delay_times(self.N, timing[self.ij],
                 State.dt, dtype='?')
         self.out('max delay = {} timesteps', self.delay.delays.max())
@@ -107,10 +105,12 @@ class Synapses(Specified, BaseUnitGroup):
         """
         Update synaptic timing based on the current presynaptic spike vector.
         """
-        syn_spikes = pre_spikes = self.pre.spikes[self.j]
-        if self.delay is not None:
-            self.delay.set(pre_spikes)
-            syn_spikes = self.delay.get()
+        # TODO Rewrite for BaseProjection refactor, e.g.:
+        # syn_spikes = pre_spikes = self.pre.spikes[self.j]
+        # if self.delay is not None:
+        #     self.delay.set(pre_spikes)
+        #     syn_spikes = self.delay.get()
+        syn_spikes = self.terminal[self.j]
 
         # If release probability is defined, randomly cause spikes to fail
         if self.failures and any_(syn_spikes):

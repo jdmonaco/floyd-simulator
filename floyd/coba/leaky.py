@@ -12,12 +12,12 @@ from specify.utils import get_all_slots
 from ..layout import HexagonalDiscLayout as HexLayout
 from ..noise import OUNoiseProcess
 from ..activity import FiringRateWindow
-from ..groups import BaseUnitGroup
+from ..base import BaseUnitGroup
 from ..config import Config
 from ..state import State, RunMode
 
 
-class LIFNeuronGroup(Specified, BaseUnitGroup):
+class LeakyNeuronGroup(Specified, BaseUnitGroup):
 
     C_m           = Slider(default=200, start=50, end=500, step=5, units='pF', doc='membrane capacitance')
     g_L           = Param(default=30.0, units='nS', doc='leak conductance')

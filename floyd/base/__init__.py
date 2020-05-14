@@ -1,5 +1,5 @@
 """
-Base classes for neuron groups and synapses to connect them together.
+Base classes for input groups, neuron groups, and projections to connect them.
 """
 
 from .groups import BaseUnitGroup
