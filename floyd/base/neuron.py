@@ -68,16 +68,19 @@ class BaseNeuronGroup(InputGroup):
     def add_afferent_projection(self, projection):
         """
         Add afferent (input) projection to this neuron group.
+        
+        Returns exit status code {0,1,2} so that subclasses or downstream
+        consumers can determine whether the projection was successfully added.
         """
         if projection.post is not self:
             self.out('{} does not project to {}', projection.name, self.name,
                     error=True)
-            return
+            return 1
         
         if projection in self.afferents.values():
             self.out('{} already added to {}', projection.name, self.name,
                     error=True)
-            return
+            return 2
 
         # Add projection to this group's afferent inputs
         #
@@ -93,6 +96,8 @@ class BaseNeuronGroup(InputGroup):
         else:
             self._add_gain_spec(gname, 0.0)
             self.debug(f'added gain spec {gname!r} for {projection.name!r}')
+        
+        return 0
 
     def update(self):
         """

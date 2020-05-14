@@ -1,5 +1,5 @@
 """
-Base class for current-based (CUBA) rate-coding neuron groups.
+Base class for noisy current-based (CUBA) rate-coding neuron groups.
 """
 
 import copy
@@ -9,24 +9,21 @@ from toolbox.numpy import *
 from specify import Param, Slider, LogSlider, Specified, is_param
 from specify.utils import get_all_slots
 
+from ..base import NoisyNeuronGroup
 from ..noise import OUNoiseProcess
-from ..groups import BaseUnitGroup
 from ..state import State, RunMode
 
 
-class RateCodeNeuronGroup(Specified, BaseUnitGroup):
+class NoisyRateBasedNeuronGroup(NoisyNeuronGroup):
 
     tau_m     = Slider(10.0, start=1.0, end=100.0, step=0.1, units='ms', doc='')
     r_rest    = Slider(0.0, start=1.0, end=100.0, step=0.1, units='sp/s', doc='')
     r_max     = Slider(100.0, start=1.0, end=500.0, step=1.0, units='sp/s', doc='')
     I_DC_mean = Slider(0, start=-1e3, end=1e3, step=1e1, units='pA', doc='')
     I_noise   = Slider(0, start=-1e3, end=1e3, step=1e1, units='pA', doc='')
-    tau_noise = Param(10.0, units='ms', doc='time-constant of input current noise')
-    stochastic = Param(False, doc='use random-process inputs')
 
-    base_variables = ('x', 'y', 'r', 'excitability', 'I_app', 'I_net',
-                      'I_leak', 'I_inh', 'I_exc', 'I_proxy', 'I_app_unit',
-                      'I_total')
+    extra_variables = ('excitability', 'I_app', 'I_net', 'I_leak', 'I_inh', 'I_exc', 
+                       'I_proxy', 'I_app_unit', 'I_total')
 
     def __init__(self, *, name, N, g_log_range=(-5, 5), g_step=0.05, **kwargs):
         """
@@ -35,23 +32,6 @@ class RateCodeNeuronGroup(Specified, BaseUnitGroup):
         self._initialized = False
         self.N = N
         super().__init__(name=name, N=N, **kwargs)
-
-        if self.stochastic:
-            # Set up the intrinsic noise inputs (current-based only for
-            # rate-based neurons). In interactive run mode, generators are used
-            # to provide continuous noise.
-
-            self.oup = OUNoiseProcess(N=self.N, tau=self.tau_noise,
-                    seed=self.name+'_ratenoise')
-            if State.run_mode == RunMode.INTERACT:
-                self.eta_gen = self.oup.generator()
-                self.eta = next(self.eta_gen)
-            else:
-                self.oup.compute()
-                self.eta = self.oup.eta[...,0]
-        else:
-            self.oup = None
-            self.eta = zeros(self.N)
 
         # Initialize data structures
         self.S_inh = {}
@@ -242,3 +222,4 @@ class RateCodeNeuronGroup(Specified, BaseUnitGroup):
         Return a tuple of Panel FloatSlider objects for gain Param values.
         """
         return self.get_widgets(include=self.gain_keys)
+

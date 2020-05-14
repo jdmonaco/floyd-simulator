@@ -165,8 +165,14 @@ class NetworkGraph(TenkoObject):
         for S in State.network.synapses.values():
             post = S.post.name
             pre = S.pre.name
+            if 'g_peak' in S:
+                S_peak = S.g_peak.mean()
+            elif 'I_peak' in S:
+                S_peak = S.I_peak.mean()
+            else:
+                S_peak = 1.0
             syn_strength.append(
-                S.post[f'g_{post}_{pre}'] * S.fanin.mean() * S.g_peak.mean())
+                S.post[f'g_{post}_{pre}'] * S.fanin.mean() * S_peak)
         syn_strength = array(syn_strength)
         syn_mu = syn_strength.mean()
         syn_sigma = syn_strength.std()
