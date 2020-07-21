@@ -337,7 +337,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         dt_perf = int(1e3)
         tictoc = Markdown('Block -- [-- ms]')
         player = pn.widgets.DiscretePlayer(value='1', options=list(map(str,
-            range(1, max(4, 1+int(self.tracewin/self.calcwin))))),
+            range(1, max(4, 1 + int(self.tracewin / self.calcwin))))),
             interval=dt_perf, name='Simulation Control', loop_policy='loop')
 
         # Markdown displays for each registered table output

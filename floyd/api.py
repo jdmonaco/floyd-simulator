@@ -2,7 +2,6 @@
 Main classes and functionality provided by floyd.
 """
 
-
 from .base      import *
 from .state     import *
 from .config    import *

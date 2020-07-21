@@ -37,7 +37,8 @@ class NetworkGraph(TenkoObject):
         self.cmap = None
         self.lw = None
         self.N = len(self.G)
-        self.N_groups = len(State.network.neuron_groups)
+        self.N_groups = len(State.network.neuron_groups) + \
+                        len(State.network.input_groups)
         self.pos = None
         self.nodes = []
         self.labels = []
@@ -142,7 +143,7 @@ class NetworkGraph(TenkoObject):
                 arrow.set_alpha(alpha)
                 continue
             S = attrs['object']
-            if S.transmitter == 'GABA':
+            if hasattr(S, 'transmitter') and S.transmitter == 'GABA':
                 arrow.set_arrowstyle('->')
             if sigma == 0.0:
                 arrow.set_linewidth(lw)
@@ -151,7 +152,8 @@ class NetworkGraph(TenkoObject):
 
         self.artists = [self.nodes]
         self.artists.extend(self.labels)
-        self.artists.extend(self.arrows)
+        if self.arrows is not None:
+            self.artists.extend(self.arrows)
 
         if 'simplot' in State:
             State.simplot.register_network_graph(self)

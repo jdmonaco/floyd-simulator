@@ -92,3 +92,12 @@ class InputGroup(Specified, BaseUnitGroup):
         # extremities, then the mean tells you at least one or the other is
         # currently at extreme values.
         self._pulse = (self._pulse_active**4 + self._pulse_output**4) / 2
+
+    def get_output_metric(self):
+        return self._pulse_output
+
+    def get_active_metric(self):
+        return self._pulse_active
+        
+    def get_pulse_metric(self):
+        return self._pulse

@@ -68,6 +68,7 @@ class BaseProjection(Specified, BaseUnitGroup):
             
         self._last_t = -1
         self._connected = False
+        self._has_delays = False
         self._initialized = True
 
     def print_stats(self):
@@ -122,6 +123,7 @@ class BaseProjection(Specified, BaseUnitGroup):
         self._cursor[self._cursor < 0] = 0  # init zero-delays to index 0
         self._lines = zeros(dshape[:-1] + (self._max_delay + 1,), 
                                     self.signal_dtype)
+        self._has_delays = True
 
     def update(self):
         """
@@ -129,24 +131,27 @@ class BaseProjection(Specified, BaseUnitGroup):
         """
         if State.t <= self._last_t: return
 
-        if self._zero_delays:
-            sigout = self.pre.output[self._pre_idx]
-        else:
-            # Update the transmitter outputs at the current cursor
-            np.put_along_axis(self._lines, self._cursor, 
-                self.pre.output[self._pre_idx,AX], axis=self._delay_axis)
+        if self._has_delays:
+            if self._zero_delays:
+                sigout = self.pre.output[self._pre_idx]
+            else:
+                # Update the transmitter outputs at the current cursor
+                np.put_along_axis(self._lines, self._cursor, 
+                    self.pre.output[self._pre_idx,AX], axis=self._delay_axis)
 
-            # Increment the delay line cursor
-            self._cursor[:] = (self._cursor + 1) % (self._delays + 1)
+                # Increment the delay line cursor
+                self._cursor[:] = (self._cursor + 1) % (self._delays + 1)
 
-            # Set output to the new cursor position
-            sigout = np.take_along_axis(self._lines, self._cursor, 
-                axis=self._delay_axis)[...,0]
+                # Set output to the new cursor position
+                sigout = np.take_along_axis(self._lines, self._cursor, 
+                    axis=self._delay_axis)[...,0]
         
-        if self._dense_delays:
-            self.terminal[:] = sigout
+            if self._dense_delays:
+                self.terminal[:] = sigout
+            else:
+                self.terminal[self.ij] = sigout
         else:
-            self.terminal[self.ij] = sigout
+            self.terminal[:] = self.pre.output
 
         self._last_t = State.t
         

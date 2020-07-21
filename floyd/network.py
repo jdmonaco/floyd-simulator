@@ -251,8 +251,8 @@ class Network(TenkoObject):
         Update main simulation figure (and tables in interactive mode).
         """
         State.simplot.update_plots()
-        if State.run_mode == RunMode.INTERACT and 'tablemaker' in State and \
-                State.tablemaker is not None:
+        if State.run_mode == RunMode.INTERACT and \
+                State.is_defined('tablemaker'):
             State.tablemaker.update()
 
     def display_summary(self):
@@ -357,6 +357,22 @@ class Network(TenkoObject):
         self.counts['state_updaters'] += 1
         self.debug(f'added state updater {name!r}')
 
+    def new_input_groups(self, *groupnames, inpclass, **specs):
+        """
+        Create a batch of neuron groups of a particular class using the given
+        keyword specs and add them to the network.
+        """
+        if not groupnames:
+            return
+        self.out.hline()
+        for name in groupnames:
+            group = inpclass(name=name, **specs)
+            if name not in self.input_groups:
+                self.add_input_group(group)
+                self.debug(f'group {name!r} did not add itself to network')
+            self.out.printf(group)
+            self.out.hline()
+
     def new_neuron_groups(self, *groupnames, nrnclass, **specs):
         """
         Create a batch of neuron groups of a particular class using the given
@@ -383,7 +399,10 @@ class Network(TenkoObject):
         self.out.hline()
         for pre, post in prepost:
             if type(pre) is str:
-                pre = self.neuron_groups[pre]
+                if pre in self.neuron_groups:
+                    pre = self.neuron_groups[pre]
+                elif pre in self.input_groups:
+                    pre = self.input_groups[pre]
             if type(post) is str:
                 post = self.neuron_groups[post]
             synapses = synclass(pre, post, **specs)

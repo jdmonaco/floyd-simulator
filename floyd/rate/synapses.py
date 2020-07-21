@@ -8,7 +8,7 @@ from specify import Slider
 from ..base import BaseProjection
 
 
-class RateSynapses(BaseProjection):
+class RateBasedSynapses(BaseProjection):
 
     I_max = Slider(0.1, start=-1, end=1, step=0.05, doc='max. synaptic input')
 
@@ -26,7 +26,5 @@ class RateSynapses(BaseProjection):
         """
         super().update()
 
-        self.I[self.ij] = self.I_peak[self.ij] * self.S[self.ij] * \
-                            self.terminal[self.ij]
-
+        self.I[self.ij] = self.I_peak[self.ij] * self.S[self.ij] * self.terminal[self.ij]
         self.I_total[:] = self.I.sum(axis=1)

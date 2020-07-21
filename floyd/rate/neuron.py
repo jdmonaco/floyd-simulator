@@ -28,7 +28,7 @@ class RateBasedNeuronGroup(BaseNeuronGroup):
         # Initialize metrics and nonlinear activation function
         self.output = self.r_rest
         self.excitability = 1.0
-        self.F = lambda r: self.r_max * (1 + tanh(r/self.r_max)) / 2
+        self.F = lambda r: self.r_max * (1 + tanh(r / self.r_max)) / 2
 
     def update(self):
         """
