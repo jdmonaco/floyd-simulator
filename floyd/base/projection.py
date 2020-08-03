@@ -92,7 +92,7 @@ class BaseProjection(Specified, BaseUnitGroup):
         )
         self.out.printf(dict_pprint(stats, name=f'Projection({self.name})'))
 
-    def set_delays(self, delays, *, timebased=False, dense=False, dtype='u4'):
+    def set_delays(self, delays, *, timebased=True, dense=False, dtype='u4'):
         """
         Add transmission delays to the connections in this projection.
         """
