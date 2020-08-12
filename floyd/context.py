@@ -25,7 +25,8 @@ from tenko.state import Tenko
 from maps.geometry import EnvironmentGeometry
 from roto.strings import sluggify
 from pouty.console import snow as hilite
-from pouty import debug_mode, debug
+from pouty import debug
+import pouty
 
 from .recorder import MovieRecorder
 from .network import Network
@@ -112,6 +113,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
     tracewin   = Param(default=Config.tracewin, doc="ms, length of trace plot window")
     calcwin    = Param(default=Config.calcwin, doc="ms, length of rolling calculation window")
     show_debug = Param(default=Config.show_debug, doc="boolean, whether to show debug statements")
+    quiet      = Param(default=Config.quiet, doc="boolean, whether to suppress console output")
 
     def __init__(self, **kwargs):
         """
@@ -129,10 +131,15 @@ class SimulatorContext(Specified, AbstractBaseContext):
         Model components from floyd packages and modules should be instantiated
         and configured within the `setup_model()` implementation.
         """
-        debug_mode(Config.show_debug)  # default to config before init
+        pouty.quiet_mode(Config.quiet)  # default to config before init
+        pouty.debug_mode(Config.show_debug)
+
         super().__init__(spec_produce=('seed', 'tag'), **kwargs)
+
+        pouty.quiet_mode(self.quiet)  # use instance attribute after init
+        pouty.debug_mode(self.show_debug)
         self.hline()
-        debug_mode(self.show_debug)  # use instance attribute after init
+
         self._specfile_init = kwargs.get('specfile')
         self._prepare_simulation(RunMode.INTERACT, None, kwargs,
                 finish_setup=False)
@@ -196,8 +203,9 @@ class SimulatorContext(Specified, AbstractBaseContext):
         State.update(specdict, **extra_state)
         self.get_global_scope().update(specdict, **extra_state)
 
-        # Final point at which `show_debug` could possibly change
-        debug_mode(self.show_debug)
+        # Final point at which `show_debug` or `quiet` could change
+        pouty.quiet_mode(self.quiet)
+        pouty.debug_mode(self.show_debug)
 
         # Set the seed for the default random number generator state
         self.set_default_random_seed(self.seed)
@@ -205,6 +213,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # Write JSON defaults file for parameters
         dfpath = self.write_json(specdefaults, DFLTFILE, base='context',
                                  sort=True)
+        if dfpath:
         self.out(dfpath, prefix='WroteDefaultsFile')
 
         # We want to process parameter updates and write out the defaults file
@@ -221,13 +230,15 @@ class SimulatorContext(Specified, AbstractBaseContext):
 
         # Write JSON spec file of current parameter values
         sfpath = self.write_json(specdict, SPECFILE, sort=True)
+        if sfpath:
         self.out(sfpath, prefix='WroteSpecFile')
 
         # Initialize the simulation network object and assign to an instance
         # attribute (n.b., it goes into shared state anyway)
         self.network = Network()
         self.set_anybar_color('green')
-        if debug_mode(): self.printf(State)
+        if self.show_debug: 
+            self.printf(State)
         self._initialized = True
 
     def load_environment_parameters(self, env):

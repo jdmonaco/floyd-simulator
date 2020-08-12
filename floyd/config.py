@@ -24,8 +24,8 @@ Config.name           = 'floyd'
 Config.figdpi         = Tenko.screendpi
 Config.moviedpi       = Tenko.screendpi
 Config.fps            = 59.94  # 29.97 for SD  # 24.976 for 'cinematic'
-Config.compress       = 1.0  # simulation frames per video frame
-Config.progress_width = 80   # number of characters in the progress bar
+Config.compress       = 1.0    # simulation frames per video frame
+Config.progress_width = 80     # number of characters in the progress bar
 
 
 #
@@ -44,6 +44,7 @@ Config.figh       = 9.0
 Config.tracewin   = 100.0
 Config.calcwin    = 25.0
 Config.show_debug = False
+Config.quiet      = False
 Config.run_mode   = None
 
 
