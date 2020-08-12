@@ -12,6 +12,7 @@ except ImportError:
 
 import os
 import time
+import shutil
 import functools
 from importlib import import_module
 
@@ -40,6 +41,28 @@ DFLTFILE = 'defaults.json'
 
 # Simulator method decorators
 
+def sample(func):
+    """
+    Decorator for methods that sample a simulation without saving data, 
+    log files, figures, etc. Decorated methods may return a value, such as 
+    the result of calculating a metric on the simulation data. 
+    """
+    mode = RunMode.SAMPLE
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+        self = args[0]
+        debug(f'sampling {func.__name__} in {mode!r}', prefix='launcher')
+        self._prepare_simulation(mode, args, kwargs)
+        self.setup_model()
+        res = func(*args, **kwargs)
+
+        # Clean up the temporary directory if dry run
+        if self._dryrun:
+            shutil.rmtree(self._rootdir)
+            
+        return res
+    return wrapped
+
 def simulate(func=None, *, mode=None):
     """
     Decorator for simulation methods with keyword-only mode argument, which is
@@ -63,7 +86,8 @@ def simulate(func=None, *, mode=None):
 
         # Call the user-defined model setup method and display the network
         self.setup_model()
-        if mode != RunMode.RECORD and hasattr(self, 'init_figure'):
+        if mode not in (RunMode.RECORD, RunMode.SAMPLE) and \
+                hasattr(self, 'init_figure'):
             State.simplot.init(self.init_figure)
         self.hline()
         State.network.display_neuron_groups()
@@ -157,7 +181,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         Helper method to reset the shared state for the context.
         """
-        State.reset_state()
+        State.reset()
 
     def printspec(self):
         self.printf(Specified.__str__(self))
@@ -214,7 +238,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         dfpath = self.write_json(specdefaults, DFLTFILE, base='context',
                                  sort=True)
         if dfpath:
-        self.out(dfpath, prefix='WroteDefaultsFile')
+            self.out(dfpath, prefix='WroteDefaultsFile')
 
         # We want to process parameter updates and write out the defaults file
         # during both construction (__init__) and method calls to begin
@@ -231,7 +255,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # Write JSON spec file of current parameter values
         sfpath = self.write_json(specdict, SPECFILE, sort=True)
         if sfpath:
-        self.out(sfpath, prefix='WroteSpecFile')
+            self.out(sfpath, prefix='WroteSpecFile')
 
         # Initialize the simulation network object and assign to an instance
         # attribute (n.b., it goes into shared state anyway)
@@ -276,8 +300,26 @@ class SimulatorContext(Specified, AbstractBaseContext):
         """
         raise NotImplementedError('models must implement setup_model()')
 
+    @sample
+    def evaluate_metric(self, f_eval):
+        """
+        Run a sample simulation to be evaluated by the given function, which should
+        take a ModelRecorder object as an argument and return the calculated value
+        (or values) of the target metric.
+        """
+        if State.recorder is None:
+            raise RunTimeError('model does not specify a ModelRecorder object')
+
+        while State.simclock:
+            self.network.model_update()
+        
+        # Compute the metric on the recorded simulation data
+        metric = f_eval(State.recorder)
+
+        return metric
+
     @simulate(mode='record')
-    def export_network_data(self):
+    def export_network_data(self, specfile=None):
         """
         Convenience 'simulation' method that just exports network data.
         """
@@ -318,7 +360,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         Simulate the model in batch mode for data collection.
         """
         if State.recorder is None:
-            raise RunTimeError('no ModelRecorder is defined')
+            raise RunTimeError('a ModelRecorder needs to be defined')
 
         while State.simclock:
             self.network.model_update()

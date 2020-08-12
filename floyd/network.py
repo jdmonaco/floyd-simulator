@@ -45,7 +45,7 @@ class Network(TenkoObject):
         self.simclock = SimulationClock()
         self.progressbar = ProgressBar()
         self.show_progress = not State.show_debug and \
-                State.run_mode != RunMode.INTERACT
+                State.run_mode not in (RunMode.INTERACT, RunMode.SAMPLE)
         self.movie_recorder = None
         self.debug('network initialized')
 
@@ -223,8 +223,8 @@ class Network(TenkoObject):
 
     def model_update(self):
         """
-        Main once-per-loop update: clocks, progress bar, recorder, state
-        updaters, input stimulators, neuron groups, and synapses.
+        Main once-per-loop update: clocks, progress bar, state updaters, 
+        stimulators, input & neuron groups, and projections.
         """
         self.simclock.update()
         if self.show_progress:
@@ -259,6 +259,7 @@ class Network(TenkoObject):
         """
         Emit a simulation completion message with summary of time/frames.
         """
+        if State.run_mode == RunMode.SAMPLE: return
         self.out.hline()
         msg = f'Simulation complete: n = {State.N_t - 1:g} timesteps'
         if State.run_mode == RunMode.RECORD:

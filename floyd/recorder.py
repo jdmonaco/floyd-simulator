@@ -75,13 +75,15 @@ class ModelRecorder(TenkoObject):
         """
         super().__init__()
 
-        # Nothing to do here if we're not in a data collection simulation
-        if State.run_mode != RunMode.RECORD:
+        # Nothing to do here if we're not in a recording or sample simulation
+        if State.run_mode not in (RunMode.RECORD, RunMode.SAMPLE):
             return
 
         # Recording time tracking and update callback
         self.clock = ArrayClock(dt=State.dt_rec, duration=State.duration)
         self.clock.add_callback(self.update)
+
+        # TODO: Need a separate clock and update callback for spikes/events
 
         # Data storage keyed by variable names
         self.unit_slices = dict()

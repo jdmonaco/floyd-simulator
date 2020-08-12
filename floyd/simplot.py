@@ -23,7 +23,7 @@ from .state import State, RunMode
 def block_record_mode(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        if State.run_mode == RunMode.RECORD:
+        if State.run_mode in (RunMode.RECORD, RunMode.SAMPLE):
             return Null
         return func(*args, **kwargs)
     return wrapper
@@ -44,7 +44,7 @@ class SimulationPlotter(TenkoObject):
         self.nrows = nrows
         self.ncols = ncols
         self.figsize = (State.figw, State.figh)
-        if State.run_mode == RunMode.RECORD:
+        if State.run_mode in (RunMode.RECORD, RunMode.SAMPLE):
             self.fig = Null
         else:
             self.fig = plt.figure(num='simplot', clear=True,

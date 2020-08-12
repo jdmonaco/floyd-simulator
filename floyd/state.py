@@ -15,6 +15,7 @@ class RunMode(enum.Enum):
     ANIMATE  = 'create_movie'
     INTERACT = 'launch_dashboard'
     RECORD   = 'collect_data'
+    SAMPLE   = 'evaluate_sample'
 
 
 class SharedState(AttrDict):
