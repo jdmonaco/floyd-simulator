@@ -12,7 +12,6 @@ except ImportError:
 
 import os
 import time
-import shutil
 import functools
 from importlib import import_module
 
@@ -57,8 +56,8 @@ def sample(func):
         res = func(*args, **kwargs)
 
         # Clean up the temporary directory if dry run
-        if self._dryrun:
-            shutil.rmtree(self._rootdir)
+        if self._dryrun_tempdir:
+            self._dryrun_tempdir.cleanup()
             
         return res
     return wrapped
@@ -136,8 +135,8 @@ class SimulatorContext(Specified, AbstractBaseContext):
     figdpi     = Param(default=Config.figdpi, doc="dots/inch, figure resolution")
     tracewin   = Param(default=Config.tracewin, doc="ms, length of trace plot window")
     calcwin    = Param(default=Config.calcwin, doc="ms, length of rolling calculation window")
-    show_debug = Param(default=Config.show_debug, doc="boolean, whether to show debug statements")
-    quiet      = Param(default=Config.quiet, doc="boolean, whether to suppress console output")
+    show_debug = Param(default=Config.show_debug, doc="bool, whether to show debug statements")
+    quiet      = Param(default=Config.quiet, doc="bool, whether to suppress console output")
 
     def __init__(self, **kwargs):
         """
