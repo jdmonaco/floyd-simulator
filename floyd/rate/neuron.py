@@ -15,7 +15,7 @@ class LinearUnitGroup(BaseNeuronGroup):
     A group of threshold-linear units with no temporal dynamics.
     """
 
-    I_thr = Slider(0.0, start=-100.0, end=100.0, step=0.1, doc='threshold')
+    I_thr = Slider(0.0, start=-500.0, end=500.0, step=5.0, doc='threshold')
     I_const = Slider(0, start=-100, end=100, step=0.1, doc='fixed input')
 
     extra_variables = ('excitability', 'I_syn', 'I_net', 'I_app', 'I_app_unit', 

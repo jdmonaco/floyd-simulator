@@ -112,14 +112,8 @@ class ModelRecorder(TenkoObject):
                     self.add_spike_monitor(name, data, record=record)
                 else:
                     self.add_variable_monitor(name, data, record=record)
-            elif np.isscalar(data):
-                try:
-                    state_value = float(data)
-                except ValueError:
-                    self.out('Not a scalar: {!r}', data, warning=True)
-                    continue
-                else:
-                    self.add_state_monitor(name, state_value)
+            elif name in State and np.isscalar(data):
+                self.add_state_monitor(name, data)
             else:
                 self.out('Not an array or state: {!r}', data, warning=True)
 
