@@ -22,7 +22,7 @@ import panel as pn
 from specify import Specified, Param
 from tenko.context import AbstractBaseContext, step
 from tenko.state import Tenko
-from maps.geometry import EnvironmentGeometry
+from arenas.geometry import EnvironmentGeometry
 from roto.strings import sluggify
 from pouty.console import snow as hilite
 from pouty import debug
@@ -42,9 +42,9 @@ DFLTFILE = 'defaults.json'
 
 def sample(func):
     """
-    Decorator for methods that sample a simulation without saving data, 
-    log files, figures, etc. Decorated methods may return a value, such as 
-    the result of calculating a metric on the simulation data. 
+    Decorator for methods that sample a simulation without saving data,
+    log files, figures, etc. Decorated methods may return a value, such as
+    the result of calculating a metric on the simulation data.
     """
     mode = RunMode.SAMPLE
     @functools.wraps(func)
@@ -58,7 +58,7 @@ def sample(func):
         # Clean up the temporary directory if dry run
         if self._dryrun_tempdir:
             self._dryrun_tempdir.cleanup()
-            
+
         return res
     return wrapped
 
@@ -260,7 +260,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
         # attribute (n.b., it goes into shared state anyway)
         self.network = Network()
         self.set_anybar_color('green')
-        if self.show_debug: 
+        if self.show_debug:
             self.printf(State)
         self._initialized = True
 
@@ -311,7 +311,7 @@ class SimulatorContext(Specified, AbstractBaseContext):
 
         while State.simclock:
             self.network.model_update()
-        
+
         # Compute the metric on the recorded simulation data
         metric = f_eval(State.recorder)
 

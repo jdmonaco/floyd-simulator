@@ -46,7 +46,7 @@ class AdaptExpNeuronGroup(LeakyNeuronGroup):
         """
         Update the adaptation variable after spikes are computed.
         """
-        self.w[self.spikes] += self.b
+        self.w[self.output] += self.b
         self.w += (State.dt / self.tau_w) * (
                     self.a*(self.v - self.E_L) - self.w
         )
@@ -55,6 +55,6 @@ class AdaptExpNeuronGroup(LeakyNeuronGroup):
         """
         Subtract the adaptation current from the net current.
         """
-        COBANeuronGroup.update_currents(self)
+        super().update_currents()
         self.I_net -= self.w
         self.I_total -= self.w * self.excitability

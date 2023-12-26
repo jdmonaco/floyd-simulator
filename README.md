@@ -1,9 +1,4 @@
-# Toolbox: Collection of Tool Packages
+# Floyd -- Declarative spiking network simulator
 
-This is the readme file for the source code used in the Toolbox project.
+This is a placeholder README document. More to come!
 
-## Files
-
-* `LICENSE.txt`: the license file
-* `README.md`: this README file
-* `setup.py`: setuptools installation file

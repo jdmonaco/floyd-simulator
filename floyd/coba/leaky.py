@@ -12,12 +12,12 @@ from specify.utils import get_all_slots
 from ..layout import HexagonalDiscLayout as HexLayout
 from ..noise import OUNoiseProcess
 from ..activity import FiringRateWindow
-from ..base import BaseUnitGroup
+from ..base import BaseNeuronGroup
 from ..config import Config
 from ..state import State, RunMode
 
 
-class LeakyNeuronGroup(Specified, BaseUnitGroup):
+class LeakyNeuronGroup(BaseNeuronGroup):
 
     C_m           = Slider(default=200, start=50, end=500, step=5, units='pF', doc='membrane capacitance')
     g_L           = Param(default=30.0, units='nS', doc='leak conductance')
@@ -37,8 +37,8 @@ class LeakyNeuronGroup(Specified, BaseUnitGroup):
     tau_noise_exc = Param(default=3.0, units='ms', doc='time-constant of noisy excitatory conductance')
     tau_noise_inh = Param(default=10.0, units='ms', doc='time-constant of noisy inhibitory conductance')
 
-    base_dtypes = {'spikes':'?'}
-    base_variables = ('x', 'y', 'v', 'spikes', 't_spike', 'g_total',
+    base_dtypes = {'output': '?'}
+    base_variables = ('x', 'y', 'v', 'output', 't_spike', 'g_total',
                       'g_total_inh', 'g_total_exc', 'excitability',
                       'I_app', 'I_app_unit', 'I_net', 'I_leak', 'I_inh',
                       'I_exc', 'I_proxy', 'I_total')
@@ -61,7 +61,7 @@ class LeakyNeuronGroup(Specified, BaseUnitGroup):
         else:
             raise ValueError('either N or layout is required')
 
-        super().__init__(name=name, N=self.N, **kwargs)
+        super().__init__(name=name, shape=self.N, **kwargs)
 
         # Set up the intrinsic noise inputs (current-based, excitatory
         # conductance-based, and inhibitory conductance-based). In interactive
@@ -187,27 +187,25 @@ class LeakyNeuronGroup(Specified, BaseUnitGroup):
         """
         self.v += (State.dt / self.C_m) * self.I_total
 
+    def update_adaptation(self):
+        """
+        Evolve the adaptation currents.
+        """
+        pass
+
     def update_spiking(self):
         """
         Update spikes (and refractory periods, etc.) for the current timstep.
         """
-        # Enforce absolute refractory period by disallowing membrane voltage
-        # from passing above the reset voltage until `tau_ref` time has passed
-        ix_ref = (State.t - self.t_spike < self.tau_ref).nonzero()[0]
-        ix_ref = ix_ref[self.v[ix_ref] > self.V_r]
-        self.v[ix_ref] = self.V_r
+        # Enforce absolute refractory period
+        self.v[State.t - self.t_spike < self.tau_ref] = self.V_r
 
-        # Perform voltage resets for threshold crossings
-        self.spikes = self.v > self.V_thr
-        self.v[self.spikes] = self.V_r
+        # Threshold crossings store spikes and reset membrane voltages
+        self.output[:] = self.v > self.V_thr
+        self.v[self.output] = self.V_r
 
         # Update most-recent spike time for units that spiked
-        self.t_spike[self.spikes] = State.t
-
-    def update_adaptation(self):
-        """
-        Update any adaptation variables after spikes are computed.
-        """
+        self.t_spike[self.output] = State.t
 
     def update_conductances(self):
         """

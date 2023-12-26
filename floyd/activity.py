@@ -32,7 +32,7 @@ class FiringRateWindow(object):
         self.j %= self.q_max
 
         # Update the current spike vector and windowed rate & active vectors
-        self.spikes[:,self.j] = self.group.spikes
+        self.spikes[:,self.j] = self.group.output
         self.R[:] = self.spikes.sum(axis=1) / self.window
         self.active[:] = any_(self.spikes, axis=1)
 

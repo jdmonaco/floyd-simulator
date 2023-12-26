@@ -2,23 +2,22 @@
 Network representation of groups and pathways as nodes and edges.
 """
 
-__all__ = ('Network',)
+__all__ = ("Network",)
 
 
-import time
 import functools
+import time
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-
 from pouty import debug_mode, printf
 from roto.dicts import pprint as dict_pprint
 from roto.strings import sluggify
 from tenko.base import TenkoObject
 
-from .clocks import SimulationClock, ProgressBar
-from .state import State, RunMode
+from .clocks import ProgressBar, SimulationClock
+from .state import RunMode, State
 
 
 class Network(TenkoObject):
@@ -38,27 +37,35 @@ class Network(TenkoObject):
         self.state_updaters = {}
         self.buttons = {}
         self.watchers = {}
-        self.counts = dict(neuron_groups=0, input_groups=0, synapses=0, 
-                           stimulators=0, state_updaters=0, clocks=0)
+        self.counts = dict(
+            neuron_groups=0,
+            input_groups=0,
+            synapses=0,
+            stimulators=0,
+            state_updaters=0,
+            clocks=0,
+        )
         self.G = nx.DiGraph()
         State.network = self
         self.simclock = SimulationClock()
         self.progressbar = ProgressBar()
-        self.show_progress = not State.show_debug and \
-                State.run_mode not in (RunMode.INTERACT, RunMode.SAMPLE)
+        self.show_progress = not State.show_debug and State.run_mode not in (
+            RunMode.INTERACT,
+            RunMode.SAMPLE,
+        )
         self.movie_recorder = None
-        self.debug('network initialized')
+        self.debug("network initialized")
 
     @staticmethod
     def _get_object_name(obj):
         """
         Given an unknown object, find a reasonable name for it.
         """
-        if hasattr(obj, 'name'):
+        if hasattr(obj, "name"):
             name = obj.name
-        elif hasattr(obj, '__name__'):
+        elif hasattr(obj, "__name__"):
             name = obj.__name__
-        elif hasattr(obj, '__qualname__'):
+        elif hasattr(obj, "__qualname__"):
             name = obj.__qualname__
         else:
             s = str(name)
@@ -73,34 +80,34 @@ class Network(TenkoObject):
         """
         Get a Panel Row of controls for network parameters.
         """
-        from panel.widgets import Checkbox, Button, TextInput
+        from panel import Column, Row, WidgetBox
         from panel.pane import Markdown
-        from panel import Row, Column, WidgetBox
+        from panel.widgets import Button, Checkbox, TextInput
 
-        paramfile_input = TextInput(name='Filename',
-            value='spec' if State.specfile is None else State.specfile)
-        notes_input = TextInput(name='Notes',
-            placeholder='Describe the results...')
-        notes_txt = Markdown('', height=150)
-        filename_txt = Markdown('' if State.specpath is None else
-                                State.specpath)
-        uniquify_box = Checkbox(name='Force unique', value=False)
-        save_btn = Button(name='Save', button_type='primary')
-        restore_btn = Button(name='Restore', button_type='success')
-        defaults_btn = Button(name='Defaults', button_type='warning')
-        zero_btn = Button(name='Disconnect', button_type='danger')
+        paramfile_input = TextInput(
+            name="Filename", value="spec" if State.specfile is None else State.specfile
+        )
+        notes_input = TextInput(name="Notes", placeholder="Describe the results...")
+        notes_txt = Markdown("", height=150)
+        filename_txt = Markdown("" if State.specpath is None else State.specpath)
+        uniquify_box = Checkbox(name="Force unique", value=False)
+        save_btn = Button(name="Save", button_type="primary")
+        restore_btn = Button(name="Restore", button_type="success")
+        defaults_btn = Button(name="Defaults", button_type="warning")
+        zero_btn = Button(name="Disconnect", button_type="danger")
 
         self.buttons.update(
-                save = save_btn,
-                restore = restore_btn,
-                defaults = defaults_btn,
-                zero = zero_btn,
+            save=save_btn,
+            restore=restore_btn,
+            defaults=defaults_btn,
+            zero=zero_btn,
         )
 
         # A decorator to throttle callback calls from double-clicked buttons
         def throttle(func=None, dt_min=0.5):
             t_last = -dt_min
             if callable(func):
+
                 @functools.wraps(func)
                 def wrapper(value):
                     nonlocal t_last
@@ -108,10 +115,14 @@ class Network(TenkoObject):
                     dt = t_now - t_last
                     t_last = t_now
                     if dt < dt_min:
-                        self.debug('{}: skipping repeat call (dt = {:.2f} s)',
-                                   func.__name__, dt)
+                        self.debug(
+                            "{}: skipping repeat call (dt = {:.2f} s)",
+                            func.__name__,
+                            dt,
+                        )
                         return
                     func(value)
+
                 return wrapper
             else:
                 return functools.partial(throttle, dt_min=dt_min)
@@ -119,33 +130,37 @@ class Network(TenkoObject):
         @throttle(10.0)
         def save(value):
             State.context.toggle_anybar()
-            self.debug('save button callback')
+            self.debug("save button callback")
             psavefn = paramfile_input.value
             unique = uniquify_box.value
             params = dict(notes=notes_input.value)
             if State.context._widgets:
-                params.update({name:slider.value for name, slider in
-                    State.context._widgets.items()})
+                params.update(
+                    {
+                        name: slider.value
+                        for name, slider in State.context._widgets.items()
+                    }
+                )
             for name, grp in self.neuron_groups.items():
-                grp_params = {name:slider.value for name, slider in
-                              grp._widgets.items()}
+                grp_params = {
+                    name: slider.value for name, slider in grp._widgets.items()
+                }
                 params[name] = grp_params
-            p = State.context.write_json(params, psavefn, base='context',
-                    unique=unique)
+            p = State.context.write_json(params, psavefn, base="context", unique=unique)
             filename_txt.object = p
 
         @throttle
         def restore(value):
             State.context.toggle_anybar()
-            self.debug('restore button callback')
+            self.debug("restore button callback")
             psavefn = paramfile_input.value
             json = State.context.get_json(psavefn)
             if json is None:
-                filename_txt.object = f'**Could not find spec: {psavefn!r}**'
+                filename_txt.object = f"**Could not find spec: {psavefn!r}**"
                 return
             fullpath, params = json
             filename_txt.object = fullpath
-            notes_input.value = params.pop('notes', '')
+            notes_input.value = params.pop("notes", "")
             for grp_name, grp in self.neuron_groups.items():
                 grp_params = params[grp_name]
                 for name, slider in grp._widgets.items():
@@ -159,13 +174,13 @@ class Network(TenkoObject):
         @throttle
         def defaults(value):
             State.context.toggle_anybar()
-            self.debug('defaults button callback')
+            self.debug("defaults button callback")
             self.reset_neurons()
 
         @throttle
         def zero(value):
             State.context.toggle_anybar()
-            self.debug('disconnect button callback')
+            self.debug("disconnect button callback")
             for grp in self.neuron_groups.values():
                 for gname in grp.gain_keys:
                     if gname in grp._widgets:
@@ -174,16 +189,21 @@ class Network(TenkoObject):
 
         # Add callback functions to the buttons and save the watcher objects
         for name, btn in self.buttons.items():
-            self.watchers[name] = btn.param.watch(eval(name), 'clicks')
+            self.watchers[name] = btn.param.watch(eval(name), "clicks")
 
         # Add a client-side link between notes input and text display
-        notes_input.link(notes_txt, value='object')
+        notes_input.link(notes_txt, value="object")
 
         # Create separete columns to construct as a final row or column
-        file_column = Column('### Model spec files', paramfile_input,
-                          uniquify_box, filename_txt, notes_input, notes_txt)
-        control_column = Column('### Parameter controls',
-                             *tuple(self.buttons.values()))
+        file_column = Column(
+            "### Model spec files",
+            paramfile_input,
+            uniquify_box,
+            filename_txt,
+            notes_input,
+            notes_txt,
+        )
+        control_column = Column("### Parameter controls", *tuple(self.buttons.values()))
 
         if single_column:
             return WidgetBox(control_column, file_column)
@@ -218,12 +238,12 @@ class Network(TenkoObject):
             self.model_update()
             State.simplot.update_traces_data()
         self.display_update()
-        self.debug('frame = {self.movie_recorder.n_frame}, t = {State.t}')
+        self.debug("frame = {self.movie_recorder.n_frame}, t = {State.t}")
         return State.simplot.artists
 
     def model_update(self):
         """
-        Main once-per-loop update: clocks, progress bar, state updaters, 
+        Main once-per-loop update: clocks, progress bar, state updaters,
         stimulators, input & neuron groups, and projections.
         """
         self.simclock.update()
@@ -251,23 +271,23 @@ class Network(TenkoObject):
         Update main simulation figure (and tables in interactive mode).
         """
         State.simplot.update_plots()
-        if State.run_mode == RunMode.INTERACT and \
-                State.is_defined('tablemaker'):
+        if State.run_mode == RunMode.INTERACT and State.is_defined("tablemaker"):
             State.tablemaker.update()
 
     def display_summary(self):
         """
         Emit a simulation completion message with summary of time/frames.
         """
-        if State.run_mode == RunMode.SAMPLE: return
+        if State.run_mode == RunMode.SAMPLE:
+            return
         self.out.hline()
-        msg = f'Simulation complete: n = {State.N_t - 1:g} timesteps'
+        msg = f"Simulation complete: n = {State.N_t - 1:g} timesteps"
         if State.run_mode == RunMode.RECORD:
-            msg += f' / {State.recorder.clock.N_t:g} samples'
+            msg += f" / {State.recorder.clock.N_t:g} samples"
         elif State.run_mode == RunMode.ANIMATE:
             N_frames = self.movie_recorder.frame.N_t
-            msg += f' / {N_frames:g} video frames'
-        self.out(msg, anybar='green')
+            msg += f" / {N_frames:g} video frames"
+        self.out(msg, anybar="green")
         self.out.hline()
 
     def reset_neurons(self):
@@ -282,7 +302,7 @@ class Network(TenkoObject):
         Set the MovieRecorder object to be used for this simulation.
         """
         if self.movie_recorder:
-            raise RuntimeError(f'recorder exists: {self.movie_recorder!r}')
+            raise RuntimeError(f"recorder exists: {self.movie_recorder!r}")
 
         self.movie_recorder = recorder
 
@@ -291,72 +311,75 @@ class Network(TenkoObject):
         Add a clock to be updated in the simulation loop.
         """
         self.clocks.append(clock)
-        self.counts['clocks'] += 1
-        self.debug(f'added clock {clock!r}')
+        self.counts["clocks"] += 1
+        self.debug(f"added clock {clock!r}")
 
     def add_neuron_group(self, group):
         """
         Add an instance of NeuronGroup to the network.
         """
         if group.name in self.neuron_groups:
-            self.out(group.name, prefix='AlreadyDeclared', warning=True)
+            self.out(group.name, prefix="AlreadyDeclared", warning=True)
             return
         self.neuron_groups[group.name] = group
         self.G.add_node(group.name, object=group)
-        self.counts['neuron_groups'] += 1
-        self.debug(f'added neuron group {group.name!r}')
-        if debug_mode(): printf(f'{group!s}')
+        self.counts["neuron_groups"] += 1
+        self.debug(f"added neuron group {group.name!r}")
+        if debug_mode():
+            printf(f"{group!s}")
 
     def add_input_group(self, group):
         """
         Add an instance of InputGroup to the network.
         """
         if group.name in self.input_groups:
-            self.out(group.name, prefix='AlreadyDeclared', warning=True)
+            self.out(group.name, prefix="AlreadyDeclared", warning=True)
             return
         self.input_groups[group.name] = group
         self.G.add_node(group.name, object=group)
-        self.counts['input_groups'] += 1
-        self.debug(f'added input group {group.name!r}')
-        if debug_mode(): printf(f'{group!s}')
+        self.counts["input_groups"] += 1
+        self.debug(f"added input group {group.name!r}")
+        if debug_mode():
+            printf(f"{group!s}")
 
     def add_projection(self, synapses):
         """
         Add an instance of Synapses to the network.
         """
         if synapses.name in self.synapses:
-            self.out(synapses.name, prefix='AlreadyDeclared', warning=True)
+            self.out(synapses.name, prefix="AlreadyDeclared", warning=True)
             return
         self.synapses[synapses.name] = synapses
         synapses.post.add_afferent_projection(synapses)
         self.G.add_edge(synapses.pre.name, synapses.post.name, object=synapses)
-        self.counts['synapses'] += 1
-        self.debug(f'added synapses {synapses!r}')
-        if debug_mode(): printf(f'{synapses!s}')
+        self.counts["synapses"] += 1
+        self.debug(f"added synapses {synapses!r}")
+        if debug_mode():
+            printf(f"{synapses!s}")
 
     def add_stimulator(self, stim):
         """
         Add an instance of InputStimulator to the network.
         """
         if stim.name in self.stimulators:
-            self.out(stimulators.name, prefix='AlreadyDeclared', warning=True)
+            self.out(stimulators.name, prefix="AlreadyDeclared", warning=True)
             return
         self.stimulators[stim.name] = stim
         self.G.add_edge(stim.name, stim.target.name, object=stim)
-        self.counts['stimulators'] += 1
-        self.debug(f'added stimulator {stim.name!r} for {stim.target.name!r}')
+        self.counts["stimulators"] += 1
+        self.debug(f"added stimulator {stim.name!r} for {stim.target.name!r}")
 
     def add_state_updater(self, updater):
         """
         Add an object that updates the shared state.
         """
         if updater in list(self.state_updaters.values()):
-            self.out(updater, prefix='AlreadyDeclared', warning=True)
+            self.out(updater, prefix="AlreadyDeclared", warning=True)
             return
         name = self._get_object_name(updater)
         self.state_updaters[name] = updater
-        self.counts['state_updaters'] += 1
-        self.debug(f'added state updater {name!r}')
+        self.counts["state_updaters"] += 1
+        self.debug(f"added state updater {name!r}")
 
     def new_input_groups(self, *groupnames, inpclass, **specs):
         """
@@ -370,7 +393,7 @@ class Network(TenkoObject):
             group = inpclass(name=name, **specs)
             if name not in self.input_groups:
                 self.add_input_group(group)
-                self.debug(f'group {name!r} did not add itself to network')
+                self.debug(f"group {name!r} did not add itself to network")
             self.out.printf(group)
             self.out.hline()
 
@@ -386,7 +409,7 @@ class Network(TenkoObject):
             group = nrnclass(name=name, **specs)
             if name not in self.neuron_groups:
                 self.add_neuron_group(group)
-                self.debug(f'group {name!r} did not add itself to network')
+                self.debug(f"group {name!r} did not add itself to network")
             self.out.printf(group)
             self.out.hline()
 
@@ -409,7 +432,7 @@ class Network(TenkoObject):
             synapses = synclass(pre, post, **specs)
             if synapses.name not in self.synapses:
                 self.add_projection(synapses)
-                self.debug(f'synapses {name!r} did not add itself to network')
+                self.debug(f"synapses {name!r} did not add itself to network")
             self.out.printf(synapses)
             self.out.hline()
 
@@ -497,31 +520,32 @@ class Network(TenkoObject):
         """
         Save weighted connectivity graph matrixes to external data files.
         """
-        fn = '{}-network'.format(State.context._projname)
-        if tag: fn += '+{}'.format(sluggify(tag))
-        savepath = State.context.path(fn, base='context', unique=True)
+        fn = "{}-network".format(State.context._projname)
+        if tag:
+            fn += "+{}".format(sluggify(tag))
+        savepath = State.context.path(fn, base="context", unique=True)
         data = {}
 
-        self.out('Calculating resultant synaptic weight matrixes...')
+        self.out("Calculating resultant synaptic weight matrixes...")
         for name, syn in self.synapses.items():
-            post_pre_name = f'{syn.post.name}_{syn.pre.name}'
-            g_post = syn.post[f'g_{post_pre_name}']
+            post_pre_name = f"{syn.post.name}_{syn.pre.name}"
+            g_post = syn.post[f"g_{post_pre_name}"]
             W = 10**g_post * syn.g_peak * syn.S
             data[post_pre_name] = W
 
-        self.out('Constructing omnibus network matrix...')
+        self.out("Constructing omnibus network matrix...")
         groups = list(self.neuron_groups.values())
         W_omni = None
         for post in groups:
             W = None
             for pre in groups:
-                g_name = f'g_{post.name}_{pre.name}'
+                g_name = f"g_{post.name}_{pre.name}"
                 if g_name not in post.synapses:
                     W_ = np.zeros((post.N, pre.N))
                 else:
                     syn = post.synapses[g_name]
-                    W_ = 10**post[g_name] * syn.g_peak * syn.S
-                    if syn.transmitter == 'GABA':
+                    W_ = 10 ** post[g_name] * syn.g_peak * syn.S
+                    if syn.transmitter == "GABA":
                         W_ *= -1
                 if W is None:
                     W = W_
@@ -531,10 +555,10 @@ class Network(TenkoObject):
                 W_omni = W
             else:
                 W_omni = np.vstack((W_omni, W))
-        data['W_all'] = W_omni
+        data["W_all"] = W_omni
 
-        self.out(list(data.keys()), prefix='WeightMatrixes')
-        self.out('Saving compressed weight matrix data...')
+        self.out(list(data.keys()), prefix="WeightMatrixes")
+        self.out("Saving compressed weight matrix data...")
         np.savez_compressed(savepath, **data)
 
-        self.out(savepath, prefix='NetworkExported')
+        self.out(savepath, prefix="NetworkExported")

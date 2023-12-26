@@ -28,14 +28,13 @@ class Synapses(BaseProjection):
 
     def __init__(self, pre, post, *, seed=None, **kwargs):
         self._initialized = False
-        super().__init__(name=f'{pre.name}->{post.name}', N=(post.N, pre.N),
-                **kwargs)
+        super().__init__(pre, post, signal_dtype='u1', **kwargs)
 
         self.E_syn = post.E_syn[self.transmitter]
         self.s = self.scale_constant()
-        self.pre = pre
-        self.post = post
-        self.recurrent = pre is post
+        # self.pre = pre
+        # self.post = post
+        # self.recurrent = pre is post
 
         self.delay = None
         self.g_peak = self.g_max
@@ -47,8 +46,8 @@ class Synapses(BaseProjection):
         self.out('{} = {:.4g} mV', self.name,
                 self.postsynaptic_potential().mean(), prefix='PostPotential')
 
-        if 'network' in State:
-            State.network.add_projection(self)
+        # if 'network' in State:
+            # State.network.add_projection(self)
         self._initialized = True
 
     def scale_constant(self):
@@ -70,47 +69,24 @@ class Synapses(BaseProjection):
                                 self.E_syn - self.post.E_L) / self.post.C_m
         return dV
 
-    def display_connectivity(self):
+    def set_delays(self, cond_velocity=0.5):
         """
-        Display the parameters and connectivity statistics for these synapses.
+        Initialize spike conduction delay lines.
         """
-        if not hasattr(self, 'active_post'):
-            raise RuntimeError('synapses must be connected first!')
-
-        msd = lambda x: '{:.3g} +/- {:.3g}'.format(np.nanmean(x), np.nanstd(x))
-        nz = self.fanin.nonzero()
-        stats = dict(
-                connectivity_fraction = '{:.3f}'.format(
-                                    float(self.N/(self.pre.N*self.post.N))),
-                fanout_cells = f'{msd(self.fanout)}',
-                fanin_cells = f'{msd(self.fanin)}',
-                fanout_contacts = f'{msd(self.S.sum(axis=0))}',
-                fanin_contacts = f'{msd(self.S.sum(axis=1))}',
-                contacts_per_connection = '{}'.format(
-                                  msd(self.S.sum(axis=1)[nz]/self.fanin[nz])),
-        )
-        self.out.printf(dict_pprint(stats, name=f'Connectivity({self.name})'))
-
-    def set_conduction_delays(self, cond_velocity=0.5):
-        """
-        Construct spike-transmission conduction delay lines.
-        """
-        timing = self.distances / cond_velocity
-        self.set_delays(timing, timingbased=True)
-        self.delay = DelayLines.from_delay_times(self.N, timing[self.ij],
-                State.dt, dtype='?')
-        self.out('max delay = {} timesteps', self.delay.delays.max())
+        alldelays = self.distances / cond_velocity
+        delays = alldelays[self.ij]
+        self.init_delays(delays, timebased=True, dense=False)
 
     def update(self):
         """
         Update synaptic timing based on the current presynaptic spike vector.
         """
-        # TODO Rewrite for BaseProjection refactor, e.g.:
-        # syn_spikes = pre_spikes = self.pre.spikes[self.j]
-        # if self.delay is not None:
-        #     self.delay.set(pre_spikes)
-        #     syn_spikes = self.delay.get()
-        syn_spikes = self.terminal[self.j]
+        # Delay lines are updated by BaseProjection w/ output to `terminal`
+        super().update()
+        try:
+            syn_spikes = self.terminal[self.ij]
+        except IndexError:
+            __import__('pdb').set_trace()
 
         # If release probability is defined, randomly cause spikes to fail
         if self.failures and any_(syn_spikes):
@@ -172,18 +148,10 @@ class Synapses(BaseProjection):
         else:
             raise ValueError(f'invalid connection specification: {p!r}')
 
-        # Process the connectivity matrix into some useful data structures
-        self.ij = C.nonzero()
-        self.i, self.j = self.ij
-        self.C[self.ij] = 1  # binary connectivity indicator
-        self.active_post = unique(self.i)
-        self.active_pre = unique(self.j)
-        self.N = int(self.C.sum())
-        self.fanin = self.C.sum(axis=1)
-        self.fanout = self.C.sum(axis=0)
-        self.convergence = {n:self.j[self.i == n] for n in self.active_post}
-        self.divergence = {n:self.i[self.j == n] for n in self.active_pre}
+        # Compute indexes and statistics to finalize connection
+        self.compute_connectivity()
 
+        # Pre-compute failure probabilities
         if self.failures:
             self.p_r_j = self.p_r[self.ij]
 

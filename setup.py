@@ -1,5 +1,5 @@
 """
-Setup installation file for Toolbox projects.
+Setup installation file for floyd.
 """
 
 from setuptools import setup
@@ -7,27 +7,26 @@ from codecs import open
 from os import path
 
 here = path.abspath(path.dirname(__file__))
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
 setup(
-    name='toolbox',
-    version='0.1.3',
-    description='Toolbox - Neuroscience Analysis and Simulation Tools',
+    name="Floyd",
+    version="0.2.3",
+    description="Floyd - Declarative Neuronal Network Simulator",
     long_description=long_description,
-    url='https://github.com/jdmonaco/toolbox',
-    author='Joseph Monaco',
-    author_email='jmonaco@jhu.edu',
-    license='MIT',
+    url="https://github.com/jdmonaco/floyd",
+    author="Joseph Monaco",
+    author_email="joe@selfmotion.net",
+    license="MIT",
     classifiers=[
-        'Development Status :: 1 - Planning',
-        'Intended Audience :: Science/Research',
-        'Topic :: Scientific/Engineering :: Artificial Intelligence',
-        'Topic :: Scientific/Engineering :: Bio-Informatics',
-        'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6'
+        "Development Status :: 1 - Planning",
+        "Intended Audience :: Science/Research",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
+        "License :: OSI Approved :: MIT License",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.9",
     ],
-    keywords='data analysis model simulation neuroscience',
-    packages=['analyze', 'floyd', 'specify', 'maps', 'pouty', 'roto',
-              'tenko', 'toolbox'])
+    packages=["floyd"],
+)

@@ -91,9 +91,9 @@ class NetworkGraph(TenkoObject):
         # Draw the labels.
         # Dict of labels keyed on the nodes.
         labels = nx.draw_networkx_labels(self.G, pos, ax=self.ax,
-                font_size=8, font_color='#2c88f0', font_weight='bold',
-                zorder=10)
+                font_size=8, font_color='#2c88f0', font_weight='bold')
         self.labels = list(labels.values())
+        [l.set_zorder(10) for l in self.labels]
 
         # Add vertical offset and path effects outline to labels to avoid
         # visual conflict with node and arrows

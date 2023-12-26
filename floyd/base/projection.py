@@ -20,7 +20,7 @@ from .groups import BaseUnitGroup
 class BaseProjection(Specified, BaseUnitGroup):
 
     """
-    A generic, one-way connection from units of a source group (pre) to the 
+    A generic, one-way connection from units of a source group (pre) to the
     units of a destination group (post).
     """
 
@@ -41,7 +41,7 @@ class BaseProjection(Specified, BaseUnitGroup):
     kernel_fanout = Param(0.1, doc='fanout specification if p is a KernelFunc')
     allow_multapses = Param(False, doc='a connection may comprise >1 contacts')
     signal_dtype = Param('d', doc='output signal dtype')
-    
+
     # Projection variables:
     #
     # C -- binary {0, 1} connectivity (adjacency) matrix
@@ -52,7 +52,7 @@ class BaseProjection(Specified, BaseUnitGroup):
 
     def __init__(self, pre, post, **kwargs):
         self._initialized = False
-        super().__init__(name=f'{pre.name}->{post.name}', 
+        super().__init__(name=f'{pre.name}->{post.name}',
             shape=(post.size, pre.size), **kwargs)
 
         # Set the transmitting (pre) and receiving (post) unit groups
@@ -65,7 +65,7 @@ class BaseProjection(Specified, BaseUnitGroup):
 
         if State.is_defined('network'):
             State.network.add_projection(self)
-            
+
         self._last_t = -1
         self._connected = False
         self._has_delays = False
@@ -92,7 +92,7 @@ class BaseProjection(Specified, BaseUnitGroup):
         )
         self.out.printf(dict_pprint(stats, name=f'Projection({self.name})'))
 
-    def set_delays(self, delays, *, timebased=True, dense=False, dtype='u4'):
+    def init_delays(self, delays, *, timebased=True, dense=False, dtype='u4'):
         """
         Add transmission delays to the connections in this projection.
         """
@@ -102,7 +102,7 @@ class BaseProjection(Specified, BaseUnitGroup):
         if timebased:
             delays = np.round(delays / State.dt)
         delays = expand_dims(delays, -1).astype(dtype)
-        
+
         # Create array of delay timesteps
         self._dense_delays = dense
         if dense:
@@ -115,15 +115,17 @@ class BaseProjection(Specified, BaseUnitGroup):
             self._delay_axis = 1
         self._delays = zeros(dshape, dtype)
         self._delays[:] = delays
-        
+
         # Create the delay cursor and lines
         self._max_delay = self._delays.max()
         self._zero_delays = self._max_delay == 0
         self._cursor = self._delays.astype('i4') - 1
         self._cursor[self._cursor < 0] = 0  # init zero-delays to index 0
-        self._lines = zeros(dshape[:-1] + (self._max_delay + 1,), 
+        self._lines = zeros(dshape[:-1] + (self._max_delay + 1,),
                                     self.signal_dtype)
+
         self._has_delays = True
+        self.out('{}: max delay = {} timesteps', self.name, self._max_delay)
 
     def update(self):
         """
@@ -136,16 +138,16 @@ class BaseProjection(Specified, BaseUnitGroup):
                 sigout = self.pre.output[self._pre_idx]
             else:
                 # Update the transmitter outputs at the current cursor
-                np.put_along_axis(self._lines, self._cursor, 
+                np.put_along_axis(self._lines, self._cursor,
                     self.pre.output[self._pre_idx,AX], axis=self._delay_axis)
 
                 # Increment the delay line cursor
                 self._cursor[:] = (self._cursor + 1) % (self._delays + 1)
 
                 # Set output to the new cursor position
-                sigout = np.take_along_axis(self._lines, self._cursor, 
+                sigout = np.take_along_axis(self._lines, self._cursor,
                     axis=self._delay_axis)[...,0]
-        
+
             if self._dense_delays:
                 self.terminal[:] = sigout
             else:
@@ -154,7 +156,7 @@ class BaseProjection(Specified, BaseUnitGroup):
             self.terminal[:] = self.pre.output
 
         self._last_t = State.t
-        
+
     def connect(self, **specs):
         """
         Build specified connectivity matrixes for this projection.
@@ -232,18 +234,39 @@ class BaseProjection(Specified, BaseUnitGroup):
         self._connected = True
         self.out('Projection connected: {}', self.name)
 
+    def display_connectivity(self):
+        """
+        Display the parameters and connectivity statistics for these synapses.
+        """
+        if not self._connected:
+            raise RuntimeError('synapses must be connected')
+
+        msd = lambda x: '{:.3g} +/- {:.3g}'.format(np.nanmean(x), np.nanstd(x))
+        nz = self.fanin.nonzero()
+        stats = dict(
+                connectivity_fraction = '{:.3f}'.format(
+                                    float(self.N/(self.pre.N*self.post.N))),
+                fanout_cells = f'{msd(self.fanout)}',
+                fanin_cells = f'{msd(self.fanin)}',
+                fanout_contacts = f'{msd(self.S.sum(axis=0))}',
+                fanin_contacts = f'{msd(self.S.sum(axis=1))}',
+                contacts_per_connection = '{}'.format(
+                                  msd(self.S.sum(axis=1)[nz]/self.fanin[nz])),
+        )
+        self.out.printf(dict_pprint(stats, name=f'Connectivity({self.name})'))
+
     def kernel_connect(self):
         """
-        Implement kernel-based connectivity using a RelativeDistanceKernel 
+        Implement kernel-based connectivity using a RelativeDistanceKernel
         object (or similar) and a fanout specification (which may be an int,
-        a float on [0,1], or a SamplerType object). 
-        
-        The contact-count matrix S is modified in-place to reflect the 
+        a float on [0,1], or a SamplerType object).
+
+        The contact-count matrix S is modified in-place to reflect the
         resulting projection connectivity.
         """
-        # Compute the kernel-valued densities, eliminate autapses, and 
+        # Compute the kernel-valued densities, eliminate autapses, and
         # normalize probability distributions
-        p_k = self.p.apply(self)  
+        p_k = self.p.apply(self)
         if self.recurrent:
             p_k *= 1 - eye(self.pre.size)  # eliminate autapses
         p_k /= p_k.sum(axis=0)[AX]
@@ -272,6 +295,6 @@ class BaseProjection(Specified, BaseUnitGroup):
         # Sample the calculated number of fanout connections
         for j in range(self.pre.size):
             conn = self.rnd.choice(self.post.size, fanout[j], p=p_k[:,j],
-                        replace=self.allow_multapses) 
+                        replace=self.allow_multapses)
             for i in conn:
                 self.S[i,j] += 1  # increment contact counts

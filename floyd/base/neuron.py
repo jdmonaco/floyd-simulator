@@ -18,12 +18,12 @@ from .input import InputGroup
 
 class BaseNeuronGroup(InputGroup):
 
-    def __init__(self, *, name, shape, g_log_range=(-5, 5), g_step=0.05, 
+    def __init__(self, *, name, shape, g_log_range=(-5, 5), g_step=0.05,
         **kwargs):
         """
         Initialize data structures and context-specified gain parameters.
         """
-        self._initialized = False 
+        self._initialized = False
         super().__init__(name=name, shape=shape, **kwargs)
 
         # Add any conductance gain values in the shared context as Params
@@ -37,7 +37,7 @@ class BaseNeuronGroup(InputGroup):
 
         if State.is_defined('network'):
             State.network.add_neuron_group(self)
-        
+
         self._initialized = True
 
     def _add_gain_spec(self, gname, value):
@@ -68,7 +68,7 @@ class BaseNeuronGroup(InputGroup):
     def add_afferent_projection(self, projection):
         """
         Add afferent (input) projection to this neuron group.
-        
+
         Returns exit status code {0,1,2} so that subclasses or downstream
         consumers can determine whether the projection was successfully added.
         """
@@ -76,7 +76,7 @@ class BaseNeuronGroup(InputGroup):
             self.out('{} does not project to {}', projection.name, self.name,
                     error=True)
             return 1
-        
+
         if projection in self.afferents.values():
             self.out('{} already added to {}', projection.name, self.name,
                     error=True)
@@ -96,14 +96,14 @@ class BaseNeuronGroup(InputGroup):
         else:
             self._add_gain_spec(gname, 0.0)
             self.debug(f'added gain spec {gname!r} for {projection.name!r}')
-        
+
         return 0
 
     def update(self):
         """
-        Update the model neurons. 
-        
-        Subclasses should overload this to update the values in the unit 
+        Update the model neurons.
+
+        Subclasses should overload this to update the values in the unit
         variable `output` and to call super().update() for pulse metrics.
         """
         super().update()

@@ -46,8 +46,8 @@ class BaseUnitGroup(TenkoObject):
             self._vardtypes = merge_two_dicts(self._vardtypes, dtype)
         elif type(dtype) is str and dtype[0] in '?uifd':
             dflt_dtype = dtype
-        
-        # TODO: Traverse MRO to aggregate extra_variables so subclasses 
+
+        # TODO: Traverse MRO to aggregate extra_variables so subclasses
         # don't need to repeat the variables of parent classes
 
         allvars = set(self.base_variables + self.extra_variables)
